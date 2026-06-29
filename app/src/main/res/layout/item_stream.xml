@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_margin="6dp"
+    android:padding="8dp"
+    android:background="@drawable/bg_tile"
+    android:focusable="true"
+    android:clickable="true">
+
+    <ImageView
+        android:id="@+id/streamLogo"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_placeholder" />
+
+    <TextView
+        android:id="@+id/streamTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="@color/text"
+        android:textSize="13sp"
+        android:gravity="center"
+        android:maxLines="2"
+        android:ellipsize="end" />
+</LinearLayout>

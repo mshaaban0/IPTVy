@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- Top tab bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tabLive"
+            style="@style/TabItem"
+            android:text="@string/live" />
+
+        <TextView
+            android:id="@+id/tabMovies"
+            style="@style/TabItem"
+            android:text="@string/movies" />
+
+        <TextView
+            android:id="@+id/tabSeries"
+            style="@style/TabItem"
+            android:text="@string/series" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/logout"
+            style="@style/TabItem"
+            android:text="@string/logout" />
+    </LinearLayout>
+
+    <!-- Body: categories | grid -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/categoryList"
+            android:layout_width="240dp"
+            android:layout_height="match_parent"
+            android:padding="8dp"
+            android:background="@color/surface"
+            android:clipToPadding="false" />
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/streamGrid"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="12dp"
+                android:clipToPadding="false" />
+
+            <TextView
+                android:id="@+id/message"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:textColor="@color/text_dim"
+                android:textSize="16sp"
+                android:visibility="gone"
+                android:text="" />
+        </FrameLayout>
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IPTVy</string>
+    <string name="server_hint">Server URL (e.g. http://host:8080)</string>
+    <string name="user_hint">Username</string>
+    <string name="pass_hint">Password</string>
+    <string name="login">Connect</string>
+    <string name="live">Live TV</string>
+    <string name="movies">Movies</string>
+    <string name="series">Series</string>
+    <string name="logout">Logout</string>
+</resources>
