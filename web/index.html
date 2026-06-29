@@ -3,65 +3,118 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>IPTVy — Download</title>
+  <meta name="theme-color" content="#15120C" />
+  <title>IPTVy — Watch anywhere</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400..700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root { color-scheme: dark; }
+    :root {
+      color-scheme: dark;
+      --bg: #15120C; --bg-2: #1C180F; --surface: #221C12; --sunk: #100D08;
+      --ink: #F2EFE6; --mid: #B7B09A; --dim: #837B66; --line: #463F2E; --line-strong: #6B6047;
+      --red: #CE4524; --red-deep: #E25A35;
+      --display: "Martian Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+      --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "Courier New", monospace;
+      --ease: cubic-bezier(0.23,1,0.32,1);
+    }
     * { box-sizing: border-box; }
     body {
-      margin: 0; min-height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      background: #0E1116; color: #fff;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      padding: 24px;
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 28px; color: var(--ink);
+      background: var(--bg);
+      font-family: var(--mono);
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
     }
     .card {
-      background: #1A1F27; border-radius: 16px; padding: 40px;
-      max-width: 460px; width: 100%; text-align: center;
-      box-shadow: 0 12px 40px rgba(0,0,0,.4);
+      position: relative; z-index: 1;
+      width: 480px; max-width: 100%; padding: 44px 40px 34px; text-align: center;
+      background: var(--surface);
+      border: 2px solid var(--ink);
+      box-shadow: 9px 9px 0 var(--red);
     }
-    .logo {
-      width: 72px; height: 72px; border-radius: 16px; background: #3DA9FC;
-      display: inline-flex; align-items: center; justify-content: center;
-      margin-bottom: 18px;
+    .mark {
+      width: 64px; height: 64px; margin: 0 auto 22px; color: var(--ink);
+      background: var(--red); border: 2px solid var(--ink);
+      display: grid; place-items: center;
     }
-    .logo svg { width: 38px; height: 38px; }
-    h1 { margin: 0 0 4px; font-size: 30px; }
-    .ver { color: #9AA5B1; font-size: 14px; margin-bottom: 24px; }
-    a.btn {
-      display: block; background: #3DA9FC; color: #001018; text-decoration: none;
-      font-weight: 700; font-size: 18px; padding: 16px; border-radius: 10px;
-      margin-bottom: 18px;
+    .mark svg { width: 31px; height: 31px; margin-left: 3px; }
+    h1 { margin: 0; font-family: var(--display); font-size: 30px; font-weight: 700; letter-spacing: -.6px; }
+    .tag { color: var(--mid); font-size: 13.5px; font-weight: 500; margin: 11px 0 30px; }
+
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 16px; text-decoration: none; font-family: var(--display);
+      font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em;
+      cursor: pointer; border: 2px solid var(--ink);
+      transition: transform 120ms var(--ease), background-color 120ms var(--ease), color 120ms var(--ease);
     }
-    a.btn:hover { background: #58b6fd; }
+    .btn:active { transform: scale(.98); }
+    .btn svg { width: 19px; height: 19px; }
+    .btn-primary { color: var(--ink); background: var(--red); margin-bottom: 12px; }
+    .btn-primary:hover { background: var(--red-deep); }
+    .btn-secondary { color: var(--ink); background: var(--surface); }
+    .btn-secondary:hover { background: var(--ink); color: var(--bg); }
+    .btn .sub { font-size: 10px; font-weight: 500; letter-spacing: .06em; opacity: .8; }
+
+    .divider { display: flex; align-items: center; gap: 14px; color: var(--dim); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .16em; margin: 26px 2px 18px; }
+    .divider::before, .divider::after { content: ""; flex: 1; height: 2px; background: var(--line); }
+
+    .note { background: var(--bg); border: 2px solid var(--ink); padding: 16px 18px; text-align: left; }
+    .note-title { font-family: var(--display); font-size: 12px; font-weight: 600; color: var(--ink); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
+    .note p { margin: 0; color: var(--mid); font-size: 12.5px; font-weight: 500; line-height: 1.62; }
     .url {
-      background: #0E1116; border: 1px solid #2A3340; border-radius: 8px;
-      padding: 12px; font-family: monospace; font-size: 15px; color: #3DA9FC;
-      word-break: break-all; user-select: all;
+      display: inline-block; margin-top: 10px; padding: 9px 12px;
+      background: var(--surface); border: 2px solid var(--line-strong);
+      font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--red-deep);
+      user-select: all; word-break: break-all;
     }
-    .hint { color: #9AA5B1; font-size: 13px; margin-top: 18px; line-height: 1.5; }
+    .foot { color: var(--dim); font-size: 11px; font-weight: 500; letter-spacing: .04em; margin-top: 24px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">
-      <svg viewBox="0 0 24 24"><path fill="#0E1116" d="M5 6h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/><path fill="#0E1116" d="M10 9l5 3-5 3z"/></svg>
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="currentColor"/></svg>
     </div>
     <h1>IPTVy</h1>
-    <div class="ver" id="ver">Android TV &amp; Mobile</div>
-    <a class="btn" href="/iptvy.apk" download>Download APK</a>
-    <div class="hint">On a TV stick, open the <b>Downloader</b> app and enter:</div>
-    <div class="url">iptvy.space/iptvy.apk</div>
-    <div class="hint">Enable "Install from unknown sources" when prompted. Then open IPTVy and sign in with your Xtream server, username, and password.</div>
+    <div class="tag" id="tag">Your Xtream playlist, on every screen</div>
+
+    <a class="btn btn-primary" href="/app/">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="currentColor"/></svg>
+      Open Web App
+    </a>
+    <a class="btn btn-secondary" href="/iptvy.apk" download>
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Download for Android &amp; TV<span class="sub" style="display:block">APK · phones, Fire TV, Google TV</span></span>
+    </a>
+
+    <div class="divider">installing on a TV stick</div>
+    <div class="note">
+      <div class="note-title">Fire TV / Android TV</div>
+      <p>
+        Open the <b>Downloader</b> app and enter:
+        <span class="url">iptvy.space/iptvy.apk</span>
+        Allow "Install from unknown sources" when prompted, then sign in with your Xtream
+        server, username, and password.
+      </p>
+    </div>
+
+    <div class="foot" id="ver">Free · No account · Your credentials stay on your device</div>
   </div>
+
   <script>
-    // Show the latest released version without hardcoding it (the APK itself is
-    // served from releases/latest/download via the /iptvy.apk redirect).
+    // Surface the latest released version without hardcoding it.
     fetch("https://api.github.com/repos/mshaaban0/IPTVy/releases/latest")
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (d && d.tag_name) {
           document.getElementById("ver").textContent =
-            "Android TV & Mobile · " + d.tag_name;
+            "Latest " + d.tag_name + " · Your credentials stay on your device";
         }
       })
       .catch(function () { /* leave the static label if offline/rate-limited */ });

@@ -1,0 +1,346 @@
+/* IPTVy — warm risograph 10-foot UI (dark), for browser + webOS.
+   Inspired by stift.sh, inverted onto a warm near-black ground: cream ink,
+   one brick-red accent, monospace type, drawn 2px borders, uppercase
+   wide-tracked labels, a whisper of grain. No rounded cards, no washed shadows
+   (the only shadow is a hard red offset plate). Motion stays minimal — focus
+   moves constantly on a TV, so selection is instant, and only transform/opacity
+   animate so it never janks on a low-power stick. */
+:root {
+  color-scheme: dark;
+
+  --bg: #15120C;
+  --bg-2: #1C180F;
+  --surface: #221C12;
+  --sunk: #100D08;
+
+  --ink: #F2EFE6;        /* cream — primary text + drawn component borders */
+  --mid: #B7B09A;
+  --dim: #837B66;
+  --line: #463F2E;       /* muted warm hairline, for dense surfaces */
+  --line-strong: #6B6047;
+
+  --red: #CE4524;
+  --red-deep: #E25A35;   /* brighter on hover, reads better on dark */
+  --amber: #E8A948;
+
+  --display: "Martian Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, "Courier New", monospace;
+
+  /* Strong custom easings — the built-in ones are too weak (Emil). */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; width: 100%; overflow: hidden;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+/* Paper grain — static, cheap, fixed. Subtle tooth so flat fills don't feel
+   dead. The fractal-noise data URI is lifted from the stift treatment. */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.view { position: absolute; inset: 0; z-index: 1; }
+.hidden { display: none !important; }
+
+/* ---------- Focus (TV remote + keyboard) ----------
+   Sharp corners let us use a real outline — crisp, instant, brick-red so it
+   pops on both the dark ground and poster art. We draw it INSET (negative
+   offset) on purpose: an outset ring gets clipped by the scrolling grid, the
+   category rail, and the overflow-hidden tab bar, which reads as a half-drawn,
+   broken box. An inset ring lives inside the element's own box, so nothing can
+   clip it. We don't transition the outline either: focus jumps constantly
+   during navigation, and a fade there reads as lag. */
+.focusable {
+  transition: transform 120ms var(--ease-out),
+              background-color 120ms var(--ease-out),
+              border-color 120ms var(--ease-out);
+}
+.focusable:focus, .focusable:focus-visible, .focusable.is-focused { outline: none; }
+.focusable:focus, .focusable.is-focused {
+  outline: 3px solid var(--red); outline-offset: -3px;
+}
+.focusable:active { transform: scale(0.97); }
+
+/* ---------- Login ---------- */
+#loginView { display: flex; align-items: center; justify-content: center; }
+.aurora { display: none; }
+.login-card {
+  position: relative;
+  width: 452px; max-width: 90vw; padding: 40px 38px 34px;
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  /* Hard offset plate — crisp red block, not a washed blur. */
+  box-shadow: 8px 8px 0 var(--red);
+  display: flex; flex-direction: column;
+}
+.brand { display: flex; align-items: center; gap: 13px; }
+.brand-mark {
+  width: 50px; height: 50px; color: var(--ink);
+  background: var(--red);
+  border: 2px solid var(--ink);
+  display: grid; place-items: center;
+}
+.brand-mark svg { width: 24px; height: 24px; }
+.brand-name { font-family: var(--display); font-size: 27px; font-weight: 700; letter-spacing: -0.4px; }
+.brand-sub { margin: 16px 0 28px; color: var(--mid); font-size: 13.5px; font-weight: 500; }
+
+.field-wrap { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.field-label { font-size: 11px; font-weight: 600; color: var(--mid); text-transform: uppercase; letter-spacing: 0.16em; }
+.field {
+  background: var(--bg); color: var(--ink);
+  border: 2px solid var(--ink); font-family: var(--mono);
+  padding: 14px 15px; font-size: 15px; font-weight: 500; width: 100%;
+}
+.field::placeholder { color: var(--dim); }
+.field:focus, .field.is-focused { outline: 3px solid var(--red); outline-offset: -3px; }
+
+.btn {
+  margin-top: 10px; cursor: pointer;
+  background: var(--red); color: var(--ink);
+  border: 2px solid var(--ink); font-family: var(--display);
+  padding: 15px; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em;
+}
+.btn:hover { background: var(--red-deep); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.status { color: var(--mid); font-size: 13px; font-weight: 500; min-height: 20px; text-align: center; margin-top: 16px; }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: relative; z-index: 5;
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 26px;
+  background: var(--bg);
+  border-bottom: 2px solid var(--line-strong);
+}
+.topbar-brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: -0.3px; }
+.topbar-brand .dot { width: 11px; height: 11px; background: var(--red); border: 1.5px solid var(--ink); }
+
+.tabs { display: flex; gap: 0; padding: 0; border: 2px solid var(--ink); overflow: hidden; }
+.tab {
+  border: none; background: var(--bg); color: var(--mid);
+  font-family: var(--mono);
+  padding: 9px 20px; font-size: 12px; font-weight: 600; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.12em;
+}
+.tab + .tab { border-left: 2px solid var(--ink); }
+.tab:hover { color: var(--ink); background: var(--bg-2); }
+.tab.active { color: var(--bg); background: var(--ink); }
+.tab.active:hover { background: var(--ink); }
+
+.search-wrap { position: relative; margin-left: auto; display: flex; align-items: center; }
+.search-icon { position: absolute; left: 13px; width: 17px; height: 17px; color: var(--mid); pointer-events: none; }
+.search {
+  background: var(--surface); color: var(--ink);
+  border: 2px solid var(--ink); font-family: var(--mono);
+  padding: 10px 16px 10px 38px; font-size: 13px; font-weight: 500; width: 230px;
+}
+.search::placeholder { color: var(--dim); }
+.search:focus, .search.is-focused { outline: 3px solid var(--red); outline-offset: -3px; }
+
+.ghost-btn {
+  background: var(--surface); color: var(--ink);
+  border: 2px solid var(--ink); font-family: var(--mono);
+  padding: 9px 16px; font-size: 12px; font-weight: 600; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.ghost-btn:hover { background: var(--ink); color: var(--bg); }
+.series-title { margin: 0; font-family: var(--display); font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
+
+/* ---------- Home body ---------- */
+.body { position: absolute; top: 65px; bottom: 0; left: 0; right: 0; display: flex; }
+.categories {
+  width: 268px; flex: none; overflow-y: auto; padding: 14px 12px;
+  border-right: 2px solid var(--line-strong);
+}
+.cat {
+  position: relative; display: block; width: 100%; text-align: left;
+  background: transparent; border: 2px solid transparent; color: var(--mid);
+  padding: 11px 14px; margin-bottom: 2px; font-family: var(--mono);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cat:hover { color: var(--ink); background: var(--bg-2); }
+.cat.active { color: var(--ink); background: var(--surface); font-weight: 600; }
+.cat.active::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px; background: var(--red);
+}
+
+.content { flex: 1; position: relative; overflow-y: auto; overflow-x: hidden; padding: 24px 28px 42px; }
+
+/* ---------- Grid ---------- */
+/* minmax(0, 1fr), not 1fr: off-screen tiles get a 280px contain-intrinsic-size,
+   and plain 1fr (= minmax(auto, 1fr)) would hold each column to that width and
+   overflow horizontally. minmax(0, …) lets the tracks shrink to fit. */
+.grid { display: grid; gap: 20px; grid-template-columns: repeat(var(--cols, 6), minmax(0, 1fr)); }
+.tile {
+  cursor: pointer;
+  display: flex; flex-direction: column;
+  /* Skip rendering tiles that are scrolled out of view — the single biggest win
+     for big catalogs on low-power TV chips. The size hint avoids scroll jank. */
+  content-visibility: auto;
+  contain-intrinsic-size: 280px 430px;
+}
+.tile.live { contain-intrinsic-size: 280px 230px; }
+
+.poster {
+  position: relative; width: 100%; aspect-ratio: 2 / 3; overflow: hidden;
+  background: var(--sunk);
+  border: 2px solid var(--line);
+}
+.tile.live .poster { aspect-ratio: 16 / 10; background: var(--bg-2); }
+.poster .thumb {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; opacity: 0; transition: opacity 220ms var(--ease-out);
+}
+.tile.live .poster .thumb { object-fit: contain; padding: 14px; }
+.tile.has-art .poster .thumb { opacity: 1; }
+.poster-fallback {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--display); font-size: 34px; font-weight: 700; color: rgba(242, 239, 230, 0.18);
+}
+.poster-grad {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, transparent 50%, rgba(8, 6, 4, 0.72));
+  opacity: 0; transition: opacity 120ms var(--ease-out);
+}
+.fav-badge {
+  position: absolute; top: 0; right: 0; width: 28px; height: 28px;
+  display: none; place-items: center; font-size: 14px;
+  color: var(--ink); background: var(--red); border-left: 2px solid var(--ink); border-bottom: 2px solid var(--ink);
+}
+.tile.fav .fav-badge { display: grid; }
+.tile .label {
+  padding: 9px 1px 2px; font-size: 12.5px; line-height: 1.35; color: var(--mid); font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  transition: color 120ms var(--ease-out);
+}
+
+.tile:focus, .tile.is-focused { outline: none; }
+/* Transform only — composited, never janks. Outline applied instantly. */
+.tile .poster { transition: transform 120ms var(--ease-out); will-change: transform; }
+.tile:focus .poster, .tile.is-focused .poster {
+  border-color: var(--red);
+  outline: 3px solid var(--red); outline-offset: -3px;
+  transform: scale(1.05);
+}
+.tile:focus .label, .tile.is-focused .label { color: var(--ink); }
+.tile:focus .poster-grad, .tile.is-focused .poster-grad { opacity: 1; }
+
+/* ---------- Episodes ---------- */
+.episodes { position: absolute; top: 65px; bottom: 0; left: 0; right: 0; overflow-y: auto; padding: 20px 28px 42px; max-width: 980px; }
+.episode {
+  display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left;
+  background: var(--surface); border: 2px solid var(--ink); color: var(--ink);
+  padding: 15px 17px; margin-bottom: 10px; font-family: var(--mono);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.episode:hover { background: var(--bg-2); }
+.episode .season { color: var(--mid); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; }
+
+.message {
+  position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%);
+  color: var(--mid); font-size: 14px; font-weight: 500; text-align: center;
+  text-transform: uppercase; letter-spacing: 0.12em;
+}
+
+/* ---------- Player ----------
+   Video plays on black, so controls stay on a dark scrim with cream glyphs.
+   Circular controls are kept round: they're functional affordances, not flat
+   card surfaces. */
+#playerView { background: #000; }
+.video { width: 100%; height: 100%; background: #000; }
+.buffering { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 3; }
+.spinner {
+  display: block; width: 50px; height: 50px; border-radius: 50%;
+  border: 3px solid rgba(242, 239, 230, 0.22); border-top-color: var(--red);
+  animation: spin 700ms linear infinite;
+}
+
+/* Control overlay — hidden by default, .show fades it in (opacity only). */
+.player-ui {
+  position: absolute; inset: 0; z-index: 4;
+  opacity: 0; pointer-events: none;
+  transition: opacity 160ms var(--ease-out);
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.player-ui.show { opacity: 1; pointer-events: auto; }
+
+.pl-top {
+  display: flex; align-items: center; gap: 16px; padding: 26px 34px 60px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.72), transparent);
+  color: var(--ink);
+}
+.pl-title { font-family: var(--display); font-size: 19px; font-weight: 700; letter-spacing: -0.2px; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7); }
+.pl-live {
+  display: inline-flex; align-items: center; gap: 7px; margin-left: 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: var(--red-deep);
+}
+.pl-live-dot { width: 8px; height: 8px; background: var(--red-deep); animation: pulse 1.6s ease-in-out infinite; }
+
+.pl-center { flex: 1; display: grid; place-items: center; }
+.pl-big {
+  width: 92px; height: 92px; border-radius: 50%; cursor: pointer;
+  border: 2px solid rgba(242, 239, 230, 0.5); color: var(--ink);
+  background: rgba(10, 9, 7, 0.5);
+  display: grid; place-items: center;
+}
+.pl-big svg { width: 40px; height: 40px; margin-left: 3px; }
+.pl-big .ic-pause { margin-left: 0; }
+.pl-big:focus, .pl-big.is-focused { outline: 3px solid var(--red); outline-offset: -3px; border-color: var(--red); }
+
+.pl-bottom { padding: 60px 34px 30px; background: linear-gradient(0deg, rgba(0, 0, 0, 0.8), transparent); color: var(--ink); }
+.pl-seek-row { display: flex; align-items: center; gap: 16px; }
+.pl-time { font-family: var(--mono); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); min-width: 48px; text-align: center; }
+
+.pl-seek { position: relative; flex: 1; height: 22px; display: flex; align-items: center; cursor: pointer; }
+.pl-track, .pl-buffered, .pl-played { position: absolute; left: 0; height: 5px; }
+.pl-track { width: 100%; background: rgba(242, 239, 230, 0.24); }
+.pl-buffered { width: 0; background: rgba(242, 239, 230, 0.42); }
+.pl-played { width: 0; background: var(--red); }
+.pl-knob {
+  position: absolute; left: 0; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--ink); transform: translate(-50%, -50%);
+  transition: transform 120ms var(--ease-out);
+}
+.pl-seek:focus, .pl-seek.is-focused { outline: none; }
+.pl-seek:focus .pl-knob, .pl-seek.is-focused .pl-knob { transform: translate(-50%, -50%) scale(1.4); background: var(--red); }
+
+.pl-controls { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.pl-spacer { flex: 1; }
+.pl-icon {
+  width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
+  background: transparent; border: 2px solid transparent; color: var(--ink);
+  display: grid; place-items: center;
+}
+.pl-icon svg { width: 23px; height: 23px; }
+.pl-icon:hover { background: rgba(242, 239, 230, 0.16); }
+.pl-icon:focus, .pl-icon.is-focused { outline: 3px solid var(--red); outline-offset: -3px; background: rgba(242, 239, 230, 0.1); }
+
+/* Toggle which glyph shows for play/pause and mute. */
+.ic-pause, .ic-mute { display: none; }
+.player-ui.is-playing .ic-play { display: none; }
+.player-ui.is-playing .ic-pause { display: block; }
+.player-ui.is-muted .ic-vol { display: none; }
+.player-ui.is-muted .ic-mute { display: block; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Touch devices fire hover on tap — gate hover-only flourishes. */
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover .poster { border-color: var(--line-strong); transform: scale(1.03); }
+  .tile:hover .label { color: var(--ink); }
+}
+
+/* Reduced motion: keep meaning (opacity/spinner), drop movement. */
+@media (prefers-reduced-motion: reduce) {
+  .focusable, .tile .poster, .poster .thumb, .poster-grad, .tile .label { transition-duration: 1ms; }
+  .tile:focus .poster, .tile.is-focused .poster { transform: none; }
+}

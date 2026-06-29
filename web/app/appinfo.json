@@ -1,0 +1,13 @@
+{
+  "id": "com.iptvy.app",
+  "version": "1.0.0",
+  "vendor": "IPTVy",
+  "type": "web",
+  "main": "index.html",
+  "title": "IPTVy",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#0E1116",
+  "iconColor": "#3DA9FC",
+  "disableBackHistoryAPI": true
+}

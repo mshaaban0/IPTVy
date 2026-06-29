@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#15120C" />
+  <title>IPTVy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400..700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Login -->
+  <section id="loginView" class="view">
+    <div class="aurora" aria-hidden="true"></div>
+    <div class="login-card">
+      <div class="brand">
+        <div class="brand-mark"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="currentColor"/></svg></div>
+        <div class="brand-name">IPTVy</div>
+      </div>
+      <p class="brand-sub">Sign in to your Xtream account</p>
+      <label class="field-wrap">
+        <span class="field-label">Server</span>
+        <input id="serverInput" class="field focusable" type="text" placeholder="http://host:port" autocomplete="off" spellcheck="false" />
+      </label>
+      <label class="field-wrap">
+        <span class="field-label">Username</span>
+        <input id="userInput" class="field focusable" type="text" placeholder="Username" autocomplete="off" spellcheck="false" />
+      </label>
+      <label class="field-wrap">
+        <span class="field-label">Password</span>
+        <input id="passInput" class="field focusable" type="password" placeholder="Password" autocomplete="off" />
+      </label>
+      <button id="loginButton" class="btn focusable">Connect</button>
+      <div id="loginStatus" class="status"></div>
+    </div>
+  </section>
+
+  <!-- Home -->
+  <section id="homeView" class="view hidden">
+    <header class="topbar">
+      <div class="topbar-brand"><span class="dot"></span>IPTVy</div>
+      <div class="tabs" role="tablist">
+        <button class="tab focusable" data-type="LIVE">Live TV</button>
+        <button class="tab focusable" data-type="VOD">Movies</button>
+        <button class="tab focusable" data-type="SERIES">Series</button>
+      </div>
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.2-3.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="searchInput" class="search focusable" type="text" placeholder="Search" autocomplete="off" />
+      </div>
+      <button id="logoutButton" class="ghost-btn focusable">Sign out</button>
+    </header>
+    <div class="body">
+      <nav id="categoryList" class="categories"></nav>
+      <main class="content">
+        <div id="streamGrid" class="grid"></div>
+        <div id="message" class="message hidden"></div>
+      </main>
+    </div>
+  </section>
+
+  <!-- Series detail -->
+  <section id="seriesView" class="view hidden">
+    <header class="topbar">
+      <button id="seriesBack" class="ghost-btn focusable">← Back</button>
+      <h2 id="seriesTitle" class="series-title">Series</h2>
+    </header>
+    <div id="episodeList" class="episodes"></div>
+    <div id="seriesMessage" class="message hidden"></div>
+  </section>
+
+  <!-- Player -->
+  <section id="playerView" class="view hidden">
+    <video id="video" class="video" playsinline></video>
+    <div id="buffering" class="buffering hidden"><span class="spinner"></span></div>
+
+    <div id="playerUI" class="player-ui">
+      <div class="pl-top">
+        <button id="plBack" class="pl-icon focusable" aria-label="Back">
+          <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div id="playerTitle" class="pl-title"></div>
+        <span id="plLive" class="pl-live hidden"><span class="pl-live-dot"></span>LIVE</span>
+      </div>
+
+      <div class="pl-center">
+        <button id="plBig" class="pl-big focusable" aria-label="Play/Pause">
+          <svg class="ic-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="currentColor"/></svg>
+          <svg class="ic-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+        </button>
+      </div>
+
+      <div class="pl-bottom">
+        <div id="plSeekRow" class="pl-seek-row">
+          <span id="plCur" class="pl-time">0:00</span>
+          <div id="plSeek" class="pl-seek focusable" tabindex="0">
+            <div class="pl-track"></div>
+            <div id="plBuffered" class="pl-buffered"></div>
+            <div id="plPlayed" class="pl-played"></div>
+            <div id="plKnob" class="pl-knob"></div>
+          </div>
+          <span id="plDur" class="pl-time">0:00</span>
+        </div>
+        <div class="pl-controls">
+          <button id="plPlay" class="pl-icon focusable" aria-label="Play/Pause">
+            <svg class="ic-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="currentColor"/></svg>
+            <svg class="ic-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+          </button>
+          <button id="plBack10" class="pl-icon pl-seekbtn focusable" aria-label="Back 10 seconds">
+            <svg viewBox="0 0 24 24"><path d="M11 7V3L5 8l6 5V9a5 5 0 1 1-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="plFwd10" class="pl-icon pl-seekbtn focusable" aria-label="Forward 10 seconds">
+            <svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="M11 7V3L5 8l6 5V9a5 5 0 1 1-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="pl-spacer"></div>
+          <button id="plMute" class="pl-icon focusable" aria-label="Mute">
+            <svg class="ic-vol" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M16 8.5a4 4 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <svg class="ic-mute" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="m16 9 5 5m0-5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+          <button id="plFs" class="pl-icon focusable" aria-label="Fullscreen">
+            <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/platform.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/xtream.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
