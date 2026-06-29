@@ -39,9 +39,10 @@ class HomeActivity : AppCompatActivity() {
     private var currentType = StreamType.LIVE
     private var currentCategory: Category? = null
 
-    /** Search index for the current tab, built lazily the first time a search runs. */
-    private var searchIndex: List<Search.Entry>? = null
+    /** Full catalog for the current tab, loaded lazily the first time a search runs. */
+    private var allStreamsCache: List<Stream>? = null
     private var searchJob: Job? = null
+    private var searching = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,7 +92,8 @@ class HomeActivity : AppCompatActivity() {
     private fun switchTab(type: StreamType) {
         currentType = type
         currentCategory = null
-        searchIndex = null
+        allStreamsCache = null
+        searching = false
         searchJob?.cancel()
         b.searchInput.text?.clear()
         highlightTab()
@@ -167,26 +169,30 @@ class HomeActivity : AppCompatActivity() {
 
     private fun scheduleSearch(query: String) {
         searchJob?.cancel()
-        val q = query.trim()
-        if (q.isEmpty()) {
-            // Search cleared: restore the category the user was browsing.
-            currentCategory?.let { loadStreams(it) }
+        // Require a couple of characters before scanning the whole catalog: a 1-char
+        // query matches almost everything, which is pointless work on a big playlist.
+        if (Search.normalize(query).length < Search.MIN_QUERY) {
+            if (searching) {
+                // Search cleared/too short: restore the category the user was browsing.
+                searching = false
+                currentCategory?.let { loadStreams(it) }
+            }
             return
         }
+        searching = true
         searchJob = lifecycleScope.launch {
             delay(300)
-            runSearch(q)
+            runSearch(query)
         }
     }
 
     private suspend fun runSearch(query: String) {
         setMessage(getString(R.string.searching))
         try {
-            val index = searchIndex ?: withContext(Dispatchers.Default) {
-                Search.index(client.streams(currentType, "__all__"))
-            }.also { searchIndex = it }
-            // Rank off the main thread so typing stays responsive on big catalogs.
-            val filtered = withContext(Dispatchers.Default) { Search.rank(query, index) }
+            val all = allStreamsCache
+                ?: client.streams(currentType, "__all__").also { allStreamsCache = it }
+            // Normalize + rank + cap off the main thread so typing stays smooth.
+            val filtered = withContext(Dispatchers.Default) { Search.search(query, all) }
             streamAdapter.submit(filtered)
             setMessage(if (filtered.isEmpty()) getString(R.string.no_results) else null)
         } catch (e: CancellationException) {

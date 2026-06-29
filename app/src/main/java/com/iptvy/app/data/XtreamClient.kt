@@ -1,5 +1,7 @@
 package com.iptvy.app.data
 
+import android.util.JsonReader
+import android.util.JsonToken
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -69,47 +71,73 @@ class XtreamClient(private val prefs: Prefs) {
         return out
     }
 
-    suspend fun streams(type: StreamType, categoryId: String): List<Stream> {
+    /**
+     * Streams the playlist with [JsonReader] straight off the socket — no full-body
+     * String and no intermediate JSON tree, so even huge "All" catalogs stay light
+     * on memory. The parsed [Stream] list is the only allocation that survives.
+     */
+    suspend fun streams(type: StreamType, categoryId: String): List<Stream> = withContext(Dispatchers.IO) {
         val action = when (type) {
             StreamType.LIVE -> "get_live_streams"
             StreamType.VOD -> "get_vod_streams"
             StreamType.SERIES -> "get_series"
         }
         val filter = if (categoryId == "__all__") "" else "&category_id=$categoryId"
-        val arr = JSONArray(getString(apiUrl(action, filter)))
-        val out = ArrayList<Stream>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            when (type) {
-                StreamType.LIVE -> out.add(
-                    Stream(
-                        id = o.opt("stream_id").toString(),
-                        name = o.optString("name"),
-                        icon = o.optString("stream_icon").ifBlank { null },
-                        type = StreamType.LIVE
-                    )
-                )
-                StreamType.VOD -> out.add(
-                    Stream(
-                        id = o.opt("stream_id").toString(),
-                        name = o.optString("name"),
-                        icon = o.optString("stream_icon").ifBlank { null },
-                        type = StreamType.VOD,
-                        containerExt = o.optString("container_extension").ifBlank { "mp4" }
-                    )
-                )
-                StreamType.SERIES -> out.add(
-                    Stream(
-                        id = o.opt("series_id").toString(),
-                        name = o.optString("name"),
-                        icon = o.optString("cover").ifBlank { null },
-                        type = StreamType.SERIES
-                    )
-                )
+        val req = Request.Builder()
+            .url(apiUrl(action, filter))
+            .header("User-Agent", "IPTVy/1.0")
+            .build()
+        http.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw RuntimeException("HTTP ${resp.code}")
+            val body = resp.body ?: return@use emptyList<Stream>()
+            JsonReader(body.charStream()).use { reader ->
+                val out = ArrayList<Stream>()
+                reader.beginArray()
+                while (reader.hasNext()) out.add(readStream(reader, type))
+                reader.endArray()
+                out
             }
         }
-        return out
     }
+
+    private fun readStream(reader: JsonReader, type: StreamType): Stream {
+        var streamId: String? = null
+        var seriesId: String? = null
+        var name = ""
+        var icon: String? = null
+        var cover: String? = null
+        var ext: String? = null
+        reader.beginObject()
+        while (reader.hasNext()) {
+            when (reader.nextName()) {
+                "stream_id" -> streamId = reader.nextStringOrNull()
+                "series_id" -> seriesId = reader.nextStringOrNull()
+                "name" -> name = reader.nextStringOrNull().orEmpty()
+                "stream_icon" -> icon = reader.nextStringOrNull()
+                "cover" -> cover = reader.nextStringOrNull()
+                "container_extension" -> ext = reader.nextStringOrNull()
+                else -> reader.skipValue()
+            }
+        }
+        reader.endObject()
+        return when (type) {
+            StreamType.LIVE -> Stream(streamId.orEmpty(), name, icon?.ifBlank { null }, StreamType.LIVE)
+            StreamType.VOD -> Stream(
+                streamId.orEmpty(), name, icon?.ifBlank { null }, StreamType.VOD,
+                containerExt = ext?.ifBlank { null } ?: "mp4"
+            )
+            StreamType.SERIES -> Stream(seriesId.orEmpty(), name, cover?.ifBlank { null }, StreamType.SERIES)
+        }
+    }
+
+    /** Reads the next value as a String (numbers stringified), or null for JSON null. */
+    private fun JsonReader.nextStringOrNull(): String? =
+        if (peek() == JsonToken.NULL) {
+            nextNull()
+            null
+        } else {
+            nextString()
+        }
 
     /** Returns episodes grouped by season, ordered. */
     suspend fun seriesEpisodes(seriesId: String): List<Episode> {

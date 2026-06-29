@@ -20,6 +20,14 @@ class StreamAdapter(
     private var items: List<Stream> = emptyList()
 
     fun submit(list: List<Stream>) {
+        // DiffUtil is ~O((N+M)*D); on huge, mostly-disjoint lists (browsing "All",
+        // or switching into/out of search results) D approaches N and it explodes on
+        // the main thread. Skip it there and just redraw.
+        if (items.size > DIFF_LIMIT || list.size > DIFF_LIMIT) {
+            items = list
+            notifyDataSetChanged()
+            return
+        }
         val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
             override fun getOldListSize() = items.size
             override fun getNewListSize() = list.size
@@ -68,4 +76,8 @@ class StreamAdapter(
     }
 
     override fun getItemCount() = items.size
+
+    companion object {
+        private const val DIFF_LIMIT = 1000
+    }
 }

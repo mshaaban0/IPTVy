@@ -4,16 +4,21 @@ import kotlin.math.abs
 import kotlin.math.min
 
 /**
- * Lenient title search for IPTV catalogs, where the same title appears with wildly
- * different punctuation/spacing ("Spider-Man", "Spiderman", "Spider Man 2 (2014)").
+ * Lenient, allocation-light title search for IPTV catalogs, where the same title
+ * appears with wildly different punctuation/spacing ("Spider-Man", "Spiderman",
+ * "Spider Man 2 (2014)").
  *
- * Matching is done on a normalized form (lowercased, punctuation -> spaces) and a
- * compact form (spaces removed), so "spider man", "spider-man" and "spiderman" all
- * find each other. A query matches when every query word is found in the title, and
- * a final fuzzy pass tolerates small typos ("spidrman"). Results are scored so the
- * tightest matches sort first.
+ * Matching uses a normalized form (lowercased, punctuation -> spaces) and a compact
+ * form (spaces removed), so "spider man", "spider-man" and "spiderman" all find each
+ * other. Every query word must appear in the title; a final fuzzy pass tolerates small
+ * typos. Titles are normalized on the fly here (no retained per-item index) so a huge
+ * catalog doesn't balloon memory on cheap TV sticks. Results are scored, ranked and
+ * capped so we never sort or render a near-full catalog.
  */
 object Search {
+
+    const val MAX_RESULTS = 300
+    const val MIN_QUERY = 2
 
     /** Lowercase; every run of non-alphanumeric chars becomes a single space. */
     fun normalize(s: String): String {
@@ -31,53 +36,45 @@ object Search {
         return sb.toString().trim()
     }
 
-    /** A title with its normalized forms precomputed, so a keystroke doesn't re-normalize the catalog. */
-    class Entry(val stream: Stream) {
-        val norm: String = normalize(stream.name)
-        val compact: String = norm.replace(" ", "")
-        val tokens: List<String> = if (norm.isEmpty()) emptyList() else norm.split(' ')
-    }
-
-    /** Build the search index once when the catalog is loaded (do this off the main thread). */
-    fun index(items: List<Stream>): List<Entry> = items.map { Entry(it) }
-
-    /** Filters and ranks the indexed catalog by [query], best matches first. */
-    fun rank(query: String, entries: List<Entry>): List<Stream> {
+    /** Filters and ranks [items] by [query], best matches first, capped at [limit]. */
+    fun search(query: String, items: List<Stream>, limit: Int = MAX_RESULTS): List<Stream> {
         val nq = normalize(query)
-        if (nq.isEmpty()) return entries.map { it.stream }
+        if (nq.length < MIN_QUERY) return emptyList()
         val qTokens = nq.split(' ')
         val qCompact = nq.replace(" ", "")
 
-        val scored = ArrayList<Pair<Entry, Int>>()
-        for (e in entries) {
-            val s = score(nq, qTokens, qCompact, e)
-            if (s > 0) scored.add(e to s)
+        val matched = ArrayList<Scored>()
+        for (item in items) {
+            val s = score(nq, qTokens, qCompact, item.name)
+            if (s > 0) matched.add(Scored(item, s))
         }
-        scored.sortWith(
-            compareByDescending<Pair<Entry, Int>> { it.second }
-                .thenBy { it.first.norm.length }
-                .thenBy { it.first.norm }
+        matched.sortWith(
+            compareByDescending<Scored> { it.score }
+                .thenBy { it.stream.name.length }
+                .thenBy { it.stream.name }
         )
-        return scored.map { it.first.stream }
+        val take = if (matched.size > limit) matched.subList(0, limit) else matched
+        return take.map { it.stream }
     }
 
+    private class Scored(val stream: Stream, val score: Int)
+
     /** Higher is a tighter match; 0 means no match. */
-    private fun score(nq: String, qTokens: List<String>, qCompact: String, e: Entry): Int {
-        val nn = e.norm
+    private fun score(nq: String, qTokens: List<String>, qCompact: String, name: String): Int {
+        val nn = normalize(name)
         if (nn.isEmpty()) return 0
-        val compact = e.compact
+        val compact = nn.replace(" ", "")
 
         // Whole query appears verbatim (ignoring punctuation) — strongest signal.
         if (nn.startsWith(nq)) return 1000
         if (nn.contains(nq)) return 900
         if (compact.contains(qCompact)) return 800
 
-        val nameTokens = e.tokens
-
         // Every query word is a substring of some part of the title.
         if (qTokens.all { t -> nn.contains(t) || compact.contains(t) }) return 600
 
         // Fuzzy fallback: every query word is within a small edit distance of a title word.
+        val nameTokens = nn.split(' ')
         if (qTokens.all { t -> compact.contains(t) || nameTokens.any { w -> closeEnough(t, w) } }) {
             return 300
         }
