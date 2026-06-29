@@ -19,6 +19,7 @@ import com.iptvy.app.data.Stream
 import com.iptvy.app.data.StreamType
 import com.iptvy.app.data.XtreamClient
 import com.iptvy.app.databinding.ActivityHomeBinding
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -115,6 +116,8 @@ class HomeActivity : AppCompatActivity() {
                 val defaultIndex = if (cats.size > 1) 1 else 0
                 categoryAdapter.submit(cats, defaultIndex)
                 loadStreams(cats[defaultIndex])
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 setMessage("Error: ${e.message}")
             }
@@ -133,6 +136,8 @@ class HomeActivity : AppCompatActivity() {
                 val list = client.streams(currentType, cat.id)
                 streamAdapter.submit(list)
                 setMessage(if (list.isEmpty()) "Empty category" else null)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 setMessage("Error: ${e.message}")
             }
@@ -184,6 +189,8 @@ class HomeActivity : AppCompatActivity() {
             val filtered = withContext(Dispatchers.Default) { Search.rank(query, index) }
             streamAdapter.submit(filtered)
             setMessage(if (filtered.isEmpty()) getString(R.string.no_results) else null)
+        } catch (e: CancellationException) {
+            throw e // a newer keystroke superseded this search; not an error
         } catch (e: Exception) {
             setMessage("Error: ${e.message}")
         }
