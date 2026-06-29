@@ -25,6 +25,9 @@ A fast, lightweight IPTV app for **Google TV / Android TV** and **Android phones
    ```
 The app appears in the Google TV app drawer (it registers a leanback launcher) and on phones in the normal launcher.
 
+## Download
+Latest signed APK: **https://iptvy.space/iptvy.apk** (or the [GitHub Releases](../../releases) page).
+
 ## Building from source
 Requires JDK 17 + Android SDK (compileSdk 34, build-tools 34.0.0).
 ```bash
@@ -33,6 +36,12 @@ Requires JDK 17 + Android SDK (compileSdk 34, build-tools 34.0.0).
 ./gradlew assembleRelease
 ./gradlew assembleDebug
 ```
+
+## Releasing & deployment
+Pushing to `main` triggers CI that builds the signed APK, publishes a GitHub Release
+(tag `v<versionName>`), and deploys the `web/` download page to Vercel. To cut a release,
+bump `versionCode`/`versionName` in `app/build.gradle.kts` and push. See
+[DEPLOYMENT.md](DEPLOYMENT.md) for the full process and required `VERCEL_TOKEN` secret.
 
 ## Architecture
 - Kotlin, classic Views + RecyclerView (lighter than Compose on cheap hardware)
