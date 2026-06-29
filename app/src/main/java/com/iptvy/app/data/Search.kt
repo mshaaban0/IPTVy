@@ -31,38 +31,48 @@ object Search {
         return sb.toString().trim()
     }
 
-    /** Filters and ranks [items] by [query], best matches first. */
-    fun rank(query: String, items: List<Stream>): List<Stream> {
+    /** A title with its normalized forms precomputed, so a keystroke doesn't re-normalize the catalog. */
+    class Entry(val stream: Stream) {
+        val norm: String = normalize(stream.name)
+        val compact: String = norm.replace(" ", "")
+        val tokens: List<String> = if (norm.isEmpty()) emptyList() else norm.split(' ')
+    }
+
+    /** Build the search index once when the catalog is loaded (do this off the main thread). */
+    fun index(items: List<Stream>): List<Entry> = items.map { Entry(it) }
+
+    /** Filters and ranks the indexed catalog by [query], best matches first. */
+    fun rank(query: String, entries: List<Entry>): List<Stream> {
         val nq = normalize(query)
-        if (nq.isEmpty()) return items
+        if (nq.isEmpty()) return entries.map { it.stream }
         val qTokens = nq.split(' ')
         val qCompact = nq.replace(" ", "")
 
-        val scored = ArrayList<Pair<Stream, Int>>(items.size)
-        for (item in items) {
-            val s = score(nq, qTokens, qCompact, item.name)
-            if (s > 0) scored.add(item to s)
+        val scored = ArrayList<Pair<Entry, Int>>()
+        for (e in entries) {
+            val s = score(nq, qTokens, qCompact, e)
+            if (s > 0) scored.add(e to s)
         }
         scored.sortWith(
-            compareByDescending<Pair<Stream, Int>> { it.second }
-                .thenBy { it.first.name.length }
-                .thenBy { it.first.name }
+            compareByDescending<Pair<Entry, Int>> { it.second }
+                .thenBy { it.first.norm.length }
+                .thenBy { it.first.norm }
         )
-        return scored.map { it.first }
+        return scored.map { it.first.stream }
     }
 
     /** Higher is a tighter match; 0 means no match. */
-    private fun score(nq: String, qTokens: List<String>, qCompact: String, name: String): Int {
-        val nn = normalize(name)
+    private fun score(nq: String, qTokens: List<String>, qCompact: String, e: Entry): Int {
+        val nn = e.norm
         if (nn.isEmpty()) return 0
-        val compact = nn.replace(" ", "")
+        val compact = e.compact
 
         // Whole query appears verbatim (ignoring punctuation) — strongest signal.
         if (nn.startsWith(nq)) return 1000
         if (nn.contains(nq)) return 900
         if (compact.contains(qCompact)) return 800
 
-        val nameTokens = nn.split(' ')
+        val nameTokens = e.tokens
 
         // Every query word is a substring of some part of the title.
         if (qTokens.all { t -> nn.contains(t) || compact.contains(t) }) return 600

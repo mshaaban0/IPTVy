@@ -19,9 +19,11 @@ import com.iptvy.app.data.Stream
 import com.iptvy.app.data.StreamType
 import com.iptvy.app.data.XtreamClient
 import com.iptvy.app.databinding.ActivityHomeBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class HomeActivity : AppCompatActivity() {
 
@@ -36,8 +38,8 @@ class HomeActivity : AppCompatActivity() {
     private var currentType = StreamType.LIVE
     private var currentCategory: Category? = null
 
-    /** All streams of the current tab, loaded lazily the first time a search runs. */
-    private var allStreamsCache: List<Stream>? = null
+    /** Search index for the current tab, built lazily the first time a search runs. */
+    private var searchIndex: List<Search.Entry>? = null
     private var searchJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,7 +90,7 @@ class HomeActivity : AppCompatActivity() {
     private fun switchTab(type: StreamType) {
         currentType = type
         currentCategory = null
-        allStreamsCache = null
+        searchIndex = null
         searchJob?.cancel()
         b.searchInput.text?.clear()
         highlightTab()
@@ -175,9 +177,11 @@ class HomeActivity : AppCompatActivity() {
     private suspend fun runSearch(query: String) {
         setMessage(getString(R.string.searching))
         try {
-            val all = allStreamsCache
-                ?: client.streams(currentType, "__all__").also { allStreamsCache = it }
-            val filtered = Search.rank(query, all)
+            val index = searchIndex ?: withContext(Dispatchers.Default) {
+                Search.index(client.streams(currentType, "__all__"))
+            }.also { searchIndex = it }
+            // Rank off the main thread so typing stays responsive on big catalogs.
+            val filtered = withContext(Dispatchers.Default) { Search.rank(query, index) }
             streamAdapter.submit(filtered)
             setMessage(if (filtered.isEmpty()) getString(R.string.no_results) else null)
         } catch (e: Exception) {
