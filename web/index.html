@@ -47,11 +47,24 @@
       <svg viewBox="0 0 24 24"><path fill="#0E1116" d="M5 6h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"/><path fill="#0E1116" d="M10 9l5 3-5 3z"/></svg>
     </div>
     <h1>IPTVy</h1>
-    <div class="ver">Android TV &amp; Mobile · v1.6</div>
+    <div class="ver" id="ver">Android TV &amp; Mobile</div>
     <a class="btn" href="/iptvy.apk" download>Download APK</a>
     <div class="hint">On a TV stick, open the <b>Downloader</b> app and enter:</div>
     <div class="url">iptvy.space/iptvy.apk</div>
     <div class="hint">Enable "Install from unknown sources" when prompted. Then open IPTVy and sign in with your Xtream server, username, and password.</div>
   </div>
+  <script>
+    // Show the latest released version without hardcoding it (the APK itself is
+    // served from releases/latest/download via the /iptvy.apk redirect).
+    fetch("https://api.github.com/repos/mshaaban0/IPTVy/releases/latest")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d && d.tag_name) {
+          document.getElementById("ver").textContent =
+            "Android TV & Mobile · " + d.tag_name;
+        }
+      })
+      .catch(function () { /* leave the static label if offline/rate-limited */ });
+  </script>
 </body>
 </html>

@@ -1,13 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "headers": [
+  "redirects": [
     {
       "source": "/iptvy.apk",
-      "headers": [
-        { "key": "Content-Type", "value": "application/vnd.android.package-archive" },
-        { "key": "Content-Disposition", "value": "attachment; filename=\"iptvy.apk\"" },
-        { "key": "Cache-Control", "value": "public, max-age=300" }
-      ]
+      "destination": "https://github.com/mshaaban0/IPTVy/releases/latest/download/iptvy.apk",
+      "permanent": false
     }
   ]
 }

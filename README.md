@@ -38,10 +38,11 @@ Requires JDK 17 + Android SDK (compileSdk 34, build-tools 34.0.0).
 ```
 
 ## Releasing & deployment
-Pushing to `main` triggers CI that builds the signed APK, publishes a GitHub Release
-(tag `v<versionName>`), and deploys the `web/` download page to Vercel. To cut a release,
-bump `versionCode`/`versionName` in `app/build.gradle.kts` and push. See
-[DEPLOYMENT.md](DEPLOYMENT.md) for the full process and required `VERCEL_TOKEN` secret.
+To cut a release, bump `versionCode`/`versionName` in `app/build.gradle.kts` and push to
+`main`. Two automations pick it up: GitHub Actions builds + signs the APK and publishes a
+GitHub Release (tag `v<versionName>`), and Vercel's Git integration redeploys the `web/`
+download page (which serves the APK from the latest release). No secrets required. See
+[DEPLOYMENT.md](DEPLOYMENT.md) for details.
 
 ## Architecture
 - Kotlin, classic Views + RecyclerView (lighter than Compose on cheap hardware)

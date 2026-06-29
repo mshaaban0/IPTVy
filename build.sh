@@ -13,5 +13,7 @@ export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
 mkdir -p dist
 cp app/build/outputs/apk/release/app-release.apk dist/IPTVy-1.6-release.apk
 cp app/build/outputs/apk/release/app-release.apk dist/IPTVy.apk
-cp app/build/outputs/apk/release/app-release.apk web/iptvy.apk
-echo "Built: dist/IPTVy-1.6-release.apk (also copied to dist/IPTVy.apk and web/iptvy.apk)"
+echo "Built: dist/IPTVy-1.6-release.apk (also copied to dist/IPTVy.apk)"
+# Note: the download page (web/) no longer ships a committed APK — it redirects
+# /iptvy.apk to the latest GitHub Release asset. To publish, push to main (CI
+# builds + releases) or attach this APK to a release manually. See DEPLOYMENT.md.
