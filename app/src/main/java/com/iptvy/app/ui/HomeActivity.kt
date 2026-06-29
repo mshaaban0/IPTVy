@@ -14,6 +14,7 @@ import com.iptvy.app.R
 import com.iptvy.app.data.Category
 import com.iptvy.app.data.FavoritesStore
 import com.iptvy.app.data.Prefs
+import com.iptvy.app.data.Search
 import com.iptvy.app.data.Stream
 import com.iptvy.app.data.StreamType
 import com.iptvy.app.data.XtreamClient
@@ -176,7 +177,7 @@ class HomeActivity : AppCompatActivity() {
         try {
             val all = allStreamsCache
                 ?: client.streams(currentType, "__all__").also { allStreamsCache = it }
-            val filtered = all.filter { it.name.contains(query, ignoreCase = true) }
+            val filtered = Search.rank(query, all)
             streamAdapter.submit(filtered)
             setMessage(if (filtered.isEmpty()) getString(R.string.no_results) else null)
         } catch (e: Exception) {
