@@ -9,12 +9,26 @@
     android:focusable="true"
     android:clickable="true">
 
-    <ImageView
-        android:id="@+id/streamLogo"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="100dp"
-        android:scaleType="fitCenter"
-        android:src="@drawable/ic_placeholder" />
+        android:layout_height="100dp">
+
+        <ImageView
+            android:id="@+id/streamLogo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_placeholder" />
+
+        <ImageView
+            android:id="@+id/streamStar"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="top|end"
+            android:src="@drawable/ic_star"
+            android:visibility="gone"
+            android:contentDescription="@string/favorites" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/streamTitle"

@@ -4,16 +4,22 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.addTextChangedListener
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.iptvy.app.R
 import com.iptvy.app.data.Category
+import com.iptvy.app.data.FavoritesStore
 import com.iptvy.app.data.Prefs
 import com.iptvy.app.data.Stream
 import com.iptvy.app.data.StreamType
 import com.iptvy.app.data.XtreamClient
 import com.iptvy.app.databinding.ActivityHomeBinding
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class HomeActivity : AppCompatActivity() {
@@ -21,11 +27,17 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var b: ActivityHomeBinding
     private lateinit var prefs: Prefs
     private lateinit var client: XtreamClient
+    private lateinit var favorites: FavoritesStore
 
     private lateinit var categoryAdapter: CategoryAdapter
     private lateinit var streamAdapter: StreamAdapter
 
     private var currentType = StreamType.LIVE
+    private var currentCategory: Category? = null
+
+    /** All streams of the current tab, loaded lazily the first time a search runs. */
+    private var allStreamsCache: List<Stream>? = null
+    private var searchJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +48,7 @@ class HomeActivity : AppCompatActivity() {
             return
         }
         client = XtreamClient(prefs)
+        favorites = FavoritesStore(this)
         b = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(b.root)
 
@@ -44,10 +57,18 @@ class HomeActivity : AppCompatActivity() {
         b.categoryList.adapter = categoryAdapter
         b.categoryList.setHasFixedSize(true)
 
-        streamAdapter = StreamAdapter { stream -> onStreamClicked(stream) }
+        streamAdapter = StreamAdapter(
+            onClick = { stream -> onStreamClicked(stream) },
+            isFavorite = { stream -> favorites.isFavorite(stream) },
+            onLongClick = { stream, position -> toggleFavorite(stream, position) }
+        )
         b.streamGrid.layoutManager = GridLayoutManager(this, spanForType())
         b.streamGrid.adapter = streamAdapter
         b.streamGrid.setHasFixedSize(true)
+
+        b.searchInput.addTextChangedListener { text ->
+            scheduleSearch(text?.toString().orEmpty())
+        }
 
         b.tabLive.setOnClickListener { switchTab(StreamType.LIVE) }
         b.tabMovies.setOnClickListener { switchTab(StreamType.VOD) }
@@ -65,6 +86,10 @@ class HomeActivity : AppCompatActivity() {
 
     private fun switchTab(type: StreamType) {
         currentType = type
+        currentCategory = null
+        allStreamsCache = null
+        searchJob?.cancel()
+        b.searchInput.text?.clear()
         highlightTab()
         (b.streamGrid.layoutManager as GridLayoutManager).spanCount = spanForType()
         streamAdapter.submit(emptyList())
@@ -81,10 +106,12 @@ class HomeActivity : AppCompatActivity() {
         setMessage("Loading…")
         lifecycleScope.launch {
             try {
-                val cats = client.categories(currentType)
-                categoryAdapter.submit(cats)
-                if (cats.isNotEmpty()) loadStreams(cats.first())
-                else setMessage("No categories")
+                val favCat = Category(FAVORITES_ID, getString(R.string.favorites))
+                val cats = listOf(favCat) + client.categories(currentType)
+                // Default landing is "All" (index 1), with Favorites pinned at the top.
+                val defaultIndex = if (cats.size > 1) 1 else 0
+                categoryAdapter.submit(cats, defaultIndex)
+                loadStreams(cats[defaultIndex])
             } catch (e: Exception) {
                 setMessage("Error: ${e.message}")
             }
@@ -92,6 +119,11 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun loadStreams(cat: Category) {
+        currentCategory = cat
+        if (cat.id == FAVORITES_ID) {
+            showFavorites()
+            return
+        }
         setMessage("Loading ${cat.name}…")
         lifecycleScope.launch {
             try {
@@ -101,6 +133,54 @@ class HomeActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 setMessage("Error: ${e.message}")
             }
+        }
+    }
+
+    private fun showFavorites() {
+        val list = favorites.all(currentType)
+        streamAdapter.submit(list)
+        setMessage(if (list.isEmpty()) getString(R.string.no_favorites) else null)
+    }
+
+    private fun toggleFavorite(stream: Stream, position: Int) {
+        val nowFavorite = favorites.toggle(stream)
+        Toast.makeText(
+            this,
+            if (nowFavorite) R.string.added_favorite else R.string.removed_favorite,
+            Toast.LENGTH_SHORT
+        ).show()
+        // Removing from the favorites view changes the list; otherwise just refresh the badge.
+        if (currentCategory?.id == FAVORITES_ID) {
+            showFavorites()
+        } else if (position != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
+            streamAdapter.notifyItemChanged(position)
+        }
+    }
+
+    private fun scheduleSearch(query: String) {
+        searchJob?.cancel()
+        val q = query.trim()
+        if (q.isEmpty()) {
+            // Search cleared: restore the category the user was browsing.
+            currentCategory?.let { loadStreams(it) }
+            return
+        }
+        searchJob = lifecycleScope.launch {
+            delay(300)
+            runSearch(q)
+        }
+    }
+
+    private suspend fun runSearch(query: String) {
+        setMessage(getString(R.string.searching))
+        try {
+            val all = allStreamsCache
+                ?: client.streams(currentType, "__all__").also { allStreamsCache = it }
+            val filtered = all.filter { it.name.contains(query, ignoreCase = true) }
+            streamAdapter.submit(filtered)
+            setMessage(if (filtered.isEmpty()) getString(R.string.no_results) else null)
+        } catch (e: Exception) {
+            setMessage("Error: ${e.message}")
         }
     }
 
@@ -134,5 +214,9 @@ class HomeActivity : AppCompatActivity() {
             tv.visibility = View.VISIBLE
             tv.text = text
         }
+    }
+
+    companion object {
+        private const val FAVORITES_ID = "__fav__"
     }
 }

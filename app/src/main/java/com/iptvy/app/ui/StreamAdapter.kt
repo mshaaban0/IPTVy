@@ -12,7 +12,9 @@ import com.iptvy.app.R
 import com.iptvy.app.data.Stream
 
 class StreamAdapter(
-    private val onClick: (Stream) -> Unit
+    private val onClick: (Stream) -> Unit,
+    private val isFavorite: (Stream) -> Boolean,
+    private val onLongClick: (Stream, Int) -> Unit
 ) : RecyclerView.Adapter<StreamAdapter.VH>() {
 
     private var items: List<Stream> = emptyList()
@@ -32,6 +34,7 @@ class StreamAdapter(
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val title: TextView = v.findViewById(R.id.streamTitle)
         val logo: ImageView = v.findViewById(R.id.streamLogo)
+        val star: ImageView = v.findViewById(R.id.streamStar)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -52,7 +55,12 @@ class StreamAdapter(
                 crossfade(false)
             }
         }
+        holder.star.visibility = if (isFavorite(s)) View.VISIBLE else View.GONE
         holder.itemView.setOnClickListener { onClick(s) }
+        holder.itemView.setOnLongClickListener {
+            onLongClick(s, holder.bindingAdapterPosition)
+            true
+        }
     }
 
     override fun onViewRecycled(holder: VH) {

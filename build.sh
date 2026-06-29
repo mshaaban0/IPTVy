@@ -11,5 +11,7 @@ export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
 
 ./gradlew assembleRelease --no-daemon
 mkdir -p dist
-cp app/build/outputs/apk/release/app-release.apk dist/IPTVy-1.0-release.apk
-echo "Built: dist/IPTVy-1.0-release.apk"
+cp app/build/outputs/apk/release/app-release.apk dist/IPTVy-1.1-release.apk
+cp app/build/outputs/apk/release/app-release.apk dist/IPTVy.apk
+cp app/build/outputs/apk/release/app-release.apk web/iptvy.apk
+echo "Built: dist/IPTVy-1.1-release.apk (also copied to dist/IPTVy.apk and web/iptvy.apk)"

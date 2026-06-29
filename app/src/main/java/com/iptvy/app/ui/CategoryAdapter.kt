@@ -15,9 +15,9 @@ class CategoryAdapter(
     private var items: List<Category> = emptyList()
     private var selected = 0
 
-    fun submit(list: List<Category>) {
+    fun submit(list: List<Category>, selectedIndex: Int = 0) {
         items = list
-        selected = 0
+        selected = selectedIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0))
         notifyDataSetChanged()
     }
 

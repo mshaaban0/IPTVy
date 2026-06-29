@@ -9,4 +9,11 @@
     <string name="movies">Movies</string>
     <string name="series">Series</string>
     <string name="logout">Logout</string>
+    <string name="search_hint">Search…</string>
+    <string name="favorites">★ Favorites</string>
+    <string name="added_favorite">Added to favorites</string>
+    <string name="removed_favorite">Removed from favorites</string>
+    <string name="no_favorites">No favorites yet. Long-press a tile to add.</string>
+    <string name="no_results">No results</string>
+    <string name="searching">Searching…</string>
 </resources>
