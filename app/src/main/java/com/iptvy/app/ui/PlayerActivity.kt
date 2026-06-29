@@ -2,6 +2,7 @@ package com.iptvy.app.ui
 
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.MediaItem
@@ -69,6 +70,17 @@ class PlayerActivity : AppCompatActivity() {
             override fun onPlaybackStateChanged(state: Int) {
                 b.buffering.visibility = if (state == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
             }
+
+            // Keep the screen awake only while content is actually playing, so the
+            // TV stick's screensaver/daydream can't kick in mid-stream. Releasing
+            // the flag when paused lets the screen sleep normally.
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
         })
 
         exo.setMediaItem(MediaItem.fromUri(url))
@@ -78,6 +90,7 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     private fun releasePlayer() {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         player?.release()
         player = null
     }
