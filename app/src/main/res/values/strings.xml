@@ -16,4 +16,6 @@
     <string name="no_favorites">No favorites yet. Long-press a tile to add.</string>
     <string name="no_results">No results</string>
     <string name="searching">Searching…</string>
+    <string name="cast_button">Cast to TV</string>
+    <string name="casting">Casting to TV</string>
 </resources>

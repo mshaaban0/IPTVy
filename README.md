@@ -8,8 +8,18 @@ A fast, lightweight IPTV app for **Google TV / Android TV** and **Android phones
 - Categories with lazy, per-category loading (handles huge playlists without eating RAM)
 - Series → episodes browser
 - Hardware-accelerated playback via Media3 / ExoPlayer (HLS + MPEG-TS)
+- **Cast to TVs (Google Cast / Chromecast)** — tap the Cast button in the player to send a stream to a Chromecast or Google TV; playback hands off to the TV and picks up at the same spot, and comes back to the phone when the session ends
 - D-pad / remote friendly UI + works with touch
-- Small footprint: ~6 MB APK, minSdk 21 (Android 5.0+), conservative player buffers
+- Small footprint: ~8 MB APK, minSdk 21 (Android 5.0+), conservative player buffers
+
+## Casting to a TV
+On a phone or tablet with Google Play services, a Cast button appears in the top-right of the
+player whenever a Chromecast/Google TV is on the same network. Tap it to pick a device: the video
+transfers to the TV (resuming at the current position) and the phone shows a "Casting to TV" status.
+Disconnecting the Cast session brings playback back to the device. Casting uses Google's Default
+Media Receiver, which handles the common streaming formats (VOD MP4, HLS/`.m3u8`); raw MPEG-TS
+`.ts` live streams depend on the receiver's codec support. On devices without Google Play services
+(e.g. bare TV sticks) the Cast button is hidden and playback stays local — nothing else changes.
 
 ## Installable APKs
 - `dist/IPTVy-1.0-release.apk` — signed release (recommended for sideloading)
