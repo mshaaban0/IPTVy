@@ -11,8 +11,8 @@ android {
         applicationId = "com.iptvy.app"
         minSdk = 21
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
     }
 
     signingConfigs {
@@ -60,4 +60,11 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-ui:$media3")
+
+    // Google Cast (Chromecast): stream to a TV from phones/tablets. media3-cast
+    // bridges the ExoPlayer API to a remote CastPlayer; the framework itself
+    // comes from play-services-cast-framework. On devices without Google Play
+    // services (e.g. bare TV sticks) the app degrades gracefully to local playback.
+    implementation("androidx.media3:media3-cast:$media3")
+    implementation("com.google.android.gms:play-services-cast-framework:21.4.0")
 }
