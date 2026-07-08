@@ -35,7 +35,11 @@ class PlayerActivity : AppCompatActivity() {
     private var currentPlayer: Player? = null
 
     private var castContext: CastContext? = null
-    private var mediaItem: MediaItem? = null
+
+    // Local and remote can need different sources for the same channel: the Cast
+    // receiver can't play raw MPEG-TS, so live is cast as HLS while local stays on .ts.
+    private var localMediaItem: MediaItem? = null
+    private var castMediaItem: MediaItem? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,9 +75,15 @@ class PlayerActivity : AppCompatActivity() {
         val title = intent.getStringExtra("title") ?: ""
         b.title.text = title
 
-        mediaItem = MediaItem.Builder()
-            .setUri(url)
-            .setMimeType(guessMimeType(url))
+        // Local plays the URL as-is (ExoPlayer has a TS extractor and handles it well).
+        localMediaItem = MediaItem.fromUri(url)
+
+        // For casting, prefer HLS for live channels — the Default Media Receiver plays
+        // HLS but not raw MPEG-TS — and hand the receiver a MIME hint and the title.
+        val castUrl = castUrlFor(url)
+        castMediaItem = MediaItem.Builder()
+            .setUri(castUrl)
+            .setMimeType(guessMimeType(castUrl))
             .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
             .build()
 
@@ -130,7 +140,8 @@ class PlayerActivity : AppCompatActivity() {
         // Casting no longer needs this device's screen awake.
         if (casting) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        mediaItem?.let { player.setMediaItem(it, position) }
+        val item = if (casting) castMediaItem else localMediaItem
+        item?.let { player.setMediaItem(it, position) }
         player.playWhenReady = playWhenReady
         player.prepare()
     }
@@ -174,6 +185,21 @@ class PlayerActivity : AppCompatActivity() {
         }
         castPlayer = null
         currentPlayer = null
+    }
+
+    /**
+     * The URL to hand the Cast receiver. Live channels come from Xtream as raw
+     * MPEG-TS (…/live/…/<id>.ts), which the Default Media Receiver can't play, so
+     * request the HLS variant (.m3u8) that Xtream serves at the same path instead.
+     * VOD/series (mp4/mkv) are left untouched.
+     */
+    private fun castUrlFor(url: String): String {
+        val base = url.substringBefore('?')
+        return if (base.contains("/live/") && base.endsWith(".ts")) {
+            base.removeSuffix(".ts") + ".m3u8"
+        } else {
+            url
+        }
     }
 
     /** Best-effort MIME hint so the Cast receiver picks the right pipeline. */

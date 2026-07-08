@@ -17,9 +17,12 @@ On a phone or tablet with Google Play services, a Cast button appears in the top
 player whenever a Chromecast/Google TV is on the same network. Tap it to pick a device: the video
 transfers to the TV (resuming at the current position) and the phone shows a "Casting to TV" status.
 Disconnecting the Cast session brings playback back to the device. Casting uses Google's Default
-Media Receiver, which handles the common streaming formats (VOD MP4, HLS/`.m3u8`); raw MPEG-TS
-`.ts` live streams depend on the receiver's codec support. On devices without Google Play services
-(e.g. bare TV sticks) the Cast button is hidden and playback stays local — nothing else changes.
+Media Receiver, which handles the common streaming formats (VOD MP4, HLS). The Chromecast receiver
+can't play raw MPEG-TS, so **live channels are cast as HLS**: the player requests the `.m3u8`
+variant that Xtream serves at the same path (`…/live/<id>.m3u8`) while local playback keeps using
+the direct `.ts` stream. Live casting therefore needs the panel to expose HLS for live (most do).
+On devices without Google Play services (e.g. bare TV sticks) the Cast button is hidden and
+playback stays local — nothing else changes.
 
 ## Installable APKs
 - `dist/IPTVy-1.0-release.apk` — signed release (recommended for sideloading)
