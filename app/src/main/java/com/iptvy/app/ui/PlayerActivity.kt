@@ -16,7 +16,9 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.google.android.gms.cast.framework.CastButtonFactory
 import com.google.android.gms.cast.framework.CastContext
+import com.iptvy.app.cast.LocalCastProxy
 import com.iptvy.app.databinding.ActivityPlayerBinding
+import fi.iki.elonen.NanoHTTPD
 
 /**
  * Full-screen player that plays locally via Media3/ExoPlayer and can hand playback
@@ -25,6 +27,7 @@ import com.iptvy.app.databinding.ActivityPlayerBinding
  *
  * The local player keeps a small buffer tuned for low-RAM TV sticks. Cast is only
  * wired up where Google Play services exist, so bare TV sticks are unaffected.
+ * Live channels are cast as HLS through an on-device CORS proxy (see [LocalCastProxy]).
  */
 class PlayerActivity : AppCompatActivity() {
 
@@ -35,6 +38,13 @@ class PlayerActivity : AppCompatActivity() {
     private var currentPlayer: Player? = null
 
     private var castContext: CastContext? = null
+
+    // On-device HLS proxy that adds CORS headers so a Chromecast can play live
+    // channels from an Xtream server. Started lazily, only when casting live.
+    private var castProxy: LocalCastProxy? = null
+
+    private var streamUrl: String? = null
+    private var streamTitle: String = ""
 
     // Local and remote can need different sources for the same channel: the Cast
     // receiver can't play raw MPEG-TS, so live is cast as HLS while local stays on .ts.
@@ -70,22 +80,24 @@ class PlayerActivity : AppCompatActivity() {
         releasePlayers()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // Kept alive across onStop so casting survives brief backgrounding; torn
+        // down only when the player screen is actually finished.
+        castProxy?.stop()
+        castProxy = null
+    }
+
     private fun initPlayers() {
         val url = intent.getStringExtra("url") ?: run { finish(); return }
-        val title = intent.getStringExtra("title") ?: ""
-        b.title.text = title
+        streamTitle = intent.getStringExtra("title") ?: ""
+        streamUrl = url
+        b.title.text = streamTitle
 
         // Local plays the URL as-is (ExoPlayer has a TS extractor and handles it well).
         localMediaItem = MediaItem.fromUri(url)
-
-        // For casting, prefer HLS for live channels — the Default Media Receiver plays
-        // HLS but not raw MPEG-TS — and hand the receiver a MIME hint and the title.
-        val castUrl = castUrlFor(url)
-        castMediaItem = MediaItem.Builder()
-            .setUri(castUrl)
-            .setMimeType(guessMimeType(castUrl))
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
-            .build()
+        // The cast source is built lazily on first cast (see castItem()), so the proxy
+        // only spins up when a stream is actually sent to a TV.
 
         // Conservative buffer sizes keep memory low on cheap sticks.
         val loadControl = DefaultLoadControl.Builder()
@@ -140,7 +152,7 @@ class PlayerActivity : AppCompatActivity() {
         // Casting no longer needs this device's screen awake.
         if (casting) window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        val item = if (casting) castMediaItem else localMediaItem
+        val item = if (casting) castItem() else localMediaItem
         item?.let { player.setMediaItem(it, position) }
         player.playWhenReady = playWhenReady
         player.prepare()
@@ -188,17 +200,49 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     /**
-     * The URL to hand the Cast receiver. Live channels come from Xtream as raw
-     * MPEG-TS (…/live/…/<id>.ts), which the Default Media Receiver can't play, so
-     * request the HLS variant (.m3u8) that Xtream serves at the same path instead.
-     * VOD/series (mp4/mkv) are left untouched.
+     * Builds (and caches) the media item for casting.
+     *
+     * Live channels come from Xtream as raw MPEG-TS (…/live/…/<id>.ts), which the
+     * Default Media Receiver can't decode, so we cast the HLS (.m3u8) variant Xtream
+     * serves at the same path. That HLS is routed through an on-device proxy that
+     * adds the CORS headers the receiver requires (Xtream sends none) — without it,
+     * the receiver silently refuses the playlist. VOD/series play directly.
      */
-    private fun castUrlFor(url: String): String {
+    private fun castItem(): MediaItem? {
+        castMediaItem?.let { return it }
+        val url = streamUrl ?: return null
         val base = url.substringBefore('?')
-        return if (base.contains("/live/") && base.endsWith(".ts")) {
-            base.removeSuffix(".ts") + ".m3u8"
+        val isLive = base.contains("/live/") && base.endsWith(".ts")
+
+        val castUrl: String
+        val mime: String
+        if (isLive) {
+            val hls = base.removeSuffix(".ts") + ".m3u8"
+            castUrl = ensureProxy()?.hlsUrl(hls) ?: hls
+            mime = MimeTypes.APPLICATION_M3U8
         } else {
-            url
+            castUrl = url
+            mime = guessMimeType(url)
+        }
+
+        return MediaItem.Builder()
+            .setUri(castUrl)
+            .setMimeType(mime)
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(streamTitle).build())
+            .build()
+            .also { castMediaItem = it }
+    }
+
+    /** Lazily starts the local cast proxy; returns null if it can't bind a socket. */
+    private fun ensureProxy(): LocalCastProxy? {
+        castProxy?.let { return it }
+        return try {
+            LocalCastProxy().also {
+                it.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
+                castProxy = it
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
