@@ -11,8 +11,8 @@ android {
         applicationId = "com.iptvy.app"
         minSdk = 21
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 10
+        versionName = "1.9"
     }
 
     signingConfigs {
@@ -67,4 +67,8 @@ dependencies {
     // services (e.g. bare TV sticks) the app degrades gracefully to local playback.
     implementation("androidx.media3:media3-cast:$media3")
     implementation("com.google.android.gms:play-services-cast-framework:21.4.0")
+
+    // Tiny embedded HTTP server used to proxy authenticated Xtream live streams to
+    // a Chromecast, adding the CORS headers the Cast receiver requires for HLS.
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
 }

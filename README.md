@@ -17,10 +17,20 @@ On a phone or tablet with Google Play services, a Cast button appears in the top
 player whenever a Chromecast/Google TV is on the same network. Tap it to pick a device: the video
 transfers to the TV (resuming at the current position) and the phone shows a "Casting to TV" status.
 Disconnecting the Cast session brings playback back to the device. Casting uses Google's Default
-Media Receiver, which handles the common streaming formats (VOD MP4, HLS). The Chromecast receiver
-can't play raw MPEG-TS, so **live channels are cast as HLS**: the player requests the `.m3u8`
-variant that Xtream serves at the same path (`…/live/<id>.m3u8`) while local playback keeps using
-the direct `.ts` stream. Live casting therefore needs the panel to expose HLS for live (most do).
+Media Receiver, which handles the common streaming formats (VOD MP4, HLS).
+
+**Live TV casting.** Live channels are trickier: the receiver can't decode raw MPEG-TS (`.ts`), and
+it *also* refuses HLS whose playlist/segments lack CORS headers — which Xtream servers don't send.
+So single-file movies cast fine but live channels wouldn't play. To fix this, live is cast as HLS
+through a **tiny HTTP proxy that runs inside the app on the phone**: it fetches the channel's
+`.m3u8` from Xtream and re-serves it to the TV with the required CORS headers, rewriting the
+playlist so segments route back through the proxy too. Local playback keeps using the direct `.ts`
+stream. This means:
+- The phone must stay on the same Wi-Fi/LAN as the TV while casting live (it relays the stream).
+- The panel must expose HLS for live (`…/live/<id>.m3u8`), which most Xtream panels do.
+- Leaving the player screen entirely stops a live cast (the proxy shuts down); backgrounding the
+  app briefly is fine.
+
 On devices without Google Play services (e.g. bare TV sticks) the Cast button is hidden and
 playback stays local — nothing else changes.
 
