@@ -1,0 +1,36 @@
+name: iptvy
+description: "IPTVy — a fast, lightweight desktop IPTV player (Xtream Codes) for Windows, macOS and Linux."
+publish_to: 'none'
+
+# Keep in loose lockstep with the Android/web apps. Bump for each desktop release.
+version: 1.9.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Xtream API calls — native HTTP, so no CORS and no proxy server needed.
+  http: ^1.2.2
+
+  # Local, on-device persistence for credentials + favorites (no shared state).
+  shared_preferences: ^2.3.2
+
+  # Native playback via libmpv — decodes MPEG-TS (live), HEVC, AC3, MKV and HLS
+  # with hardware acceleration on all three desktop OSes. This is why desktop
+  # doesn't fight the webview codec limits the browser build has to.
+  media_kit: ^1.1.11
+  media_kit_video: ^1.2.5
+  media_kit_libs_video: ^1.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
