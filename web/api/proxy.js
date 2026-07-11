@@ -1,17 +1,26 @@
 /*
- * Stateless pass-through proxy for the public browser build.
+ * Pass-through proxy for the public browser build.
  *
  * Browsers can't call Xtream panels directly (the panels send no CORS headers),
- * so the browser app routes its API calls and live-TS stream through here. This
- * function forwards exactly one user-supplied URL and streams the response back.
- * It stores nothing and logs no credentials, so there is no shared or
- * cross-user state. webOS builds never use this — they call panels directly.
+ * so the browser app routes its API calls and live HLS through here. This
+ * function forwards one user-supplied URL and streams the response back. It logs
+ * nothing, and its only state is an ephemeral, in-memory HLS node pin (see
+ * nodePins) — no persistence, no logging of the credentialed URLs.
  *
  * Note: relaying live video through a serverless function uses real bandwidth
  * and is bounded by the platform's function timeout. VOD/series play directly
  * from the panel (the browser <video> element isn't CORS-restricted), so only
- * the small JSON API calls and live MPEG-TS pass through here.
+ * the small JSON API calls and live HLS (playlist + segments) pass through here.
  */
+
+// Per-channel HLS node pin. The panel load-balances every .m3u8 request to a
+// different CDN node, and those nodes' live windows are a segment or two out of
+// sync — so re-resolving on every playlist refresh makes EXT-X-MEDIA-SEQUENCE
+// jump backwards and the player replays a few seconds. We stick to the node we
+// first resolved (its sequence is monotonic) and only resolve a fresh one when
+// its short-lived token stops working. Key = panel .m3u8 URL, value = node URL.
+const nodePins = new Map();
+
 export default async function handler(req, res) {
   const target = Array.isArray(req.query.url) ? req.query.url[0] : req.query.url;
   if (!target) { res.status(400).json({ error: 'missing url' }); return; }
@@ -26,14 +35,35 @@ export default async function handler(req, res) {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 25000);
+  const fetchOpts = {
+    headers: { 'User-Agent': 'IPTVy/1.0' },
+    redirect: 'follow',
+    signal: controller.signal
+  };
   try {
-    const upstream = await fetch(u.toString(), {
-      headers: { 'User-Agent': 'IPTVy/1.0' },
-      redirect: 'follow',
-      signal: controller.signal
-    });
+    // A .m3u8 target is a live playlist poll: resolve it through the node pin so
+    // the app keeps hitting one node (see nodePins) and rewrite its URIs. Any
+    // other target (segment, JSON, …) is fetched and relayed straight through.
+    const wantsPlaylist = u.pathname.toLowerCase().endsWith('.m3u8');
+    const upstream = wantsPlaylist
+      ? await getPlaylistUpstream(u.toString(), fetchOpts)
+      : await fetch(u.toString(), fetchOpts);
+    const ct = upstream.headers.get('content-type') || '';
+
+    // HLS playlists get rewritten so every segment/variant/key URI points back at
+    // this proxy (absolute, resolved against the playlist's own node). Only rewrite
+    // a healthy playlist; relay error responses as-is so the player can retry.
+    const isPlaylist = wantsPlaylist || /mpegurl/i.test(ct);
+    if (isPlaylist && upstream.ok) {
+      const text = await upstream.text();
+      res.status(upstream.status);
+      res.setHeader('content-type', 'application/vnd.apple.mpegurl');
+      res.setHeader('cache-control', 'no-store');
+      res.end(rewritePlaylist(text, upstream.url || u.toString()));
+      return;
+    }
+
     res.status(upstream.status);
-    const ct = upstream.headers.get('content-type');
     if (ct) res.setHeader('content-type', ct);
     res.setHeader('cache-control', 'no-store'); // never cache personal catalog data
 
@@ -51,6 +81,51 @@ export default async function handler(req, res) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Resolves a live playlist while sticking to one CDN node. Tries the pinned node
+// first (keeps EXT-X-MEDIA-SEQUENCE monotonic); if its token has expired (non-2xx)
+// it re-resolves through the panel URL, which 302s to a fresh load-balanced node,
+// and pins that. `panelUrl` is the credentialed …/<id>.m3u8; the pin holds the
+// resolved node URL (with its own token) only in memory.
+async function getPlaylistUpstream(panelUrl, fetchOpts) {
+  const pinned = nodePins.get(panelUrl);
+  if (pinned) {
+    try {
+      if (!isPrivateHost(new URL(pinned).hostname)) {
+        const up = await fetch(pinned, fetchOpts);
+        if (up.ok) return up;          // node still serving — sequence stays monotonic
+      }
+    } catch (e) { /* fall through and re-resolve */ }
+    nodePins.delete(panelUrl);
+  }
+  const up = await fetch(panelUrl, fetchOpts);   // panel 302s to a fresh node
+  if (up.ok && up.url && up.url !== panelUrl) {
+    try { if (!isPrivateHost(new URL(up.url).hostname)) nodePins.set(panelUrl, up.url); }
+    catch (e) { /* leave unpinned */ }
+  }
+  return up;
+}
+
+// Rewrites an HLS playlist so every segment/variant/key URI points back at this
+// proxy as an absolute, proxied URL. Relative URIs are resolved against `base`
+// (the playlist's final URL after redirects) so they hit the node that served it.
+function rewritePlaylist(text, base) {
+  return text.split(/\r?\n/).map((line) => {
+    const t = line.trim();
+    if (t === '') return line;
+    if (t[0] === '#') {
+      // Tag line: only URI="…" attributes (EXT-X-KEY, -MAP, -MEDIA, …) are URLs.
+      return line.replace(/URI="([^"]*)"/g, (_m, uri) => `URI="${proxify(uri, base)}"`);
+    }
+    return proxify(t, base);       // resource line: a segment or a variant playlist
+  }).join('\n');
+}
+
+function proxify(uri, base) {
+  let abs;
+  try { abs = new URL(uri, base).toString(); } catch (e) { return uri; }
+  return '/api/proxy?url=' + encodeURIComponent(abs);
 }
 
 // Blocks the obvious SSRF targets so the public proxy can't be aimed at
