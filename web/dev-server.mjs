@@ -1,13 +1,9 @@
 /*
- * Local host for the web build: serves the static app from web/app and runs the
- * real web/api/proxy.js handler at /api/proxy — so the browser build behaves
- * exactly like production (Vercel). Node stdlib only.
+ * Local dev server: serves the static app from web/app and runs the real
+ * web/api/proxy.js handler at /api/proxy — so the browser build behaves exactly
+ * like production (Vercel). Node stdlib only.
  *
  *   node web/dev-server.mjs        # then open http://localhost:8080/
- *
- * The Electron desktop wrapper (web/electron) imports createIptvyServer() and
- * runs this same host in-process, so the desktop app is byte-for-byte the web
- * app talking to the same proxy — no separate code path.
  */
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -29,11 +25,7 @@ const TYPES = {
   '.svg': 'image/svg+xml'
 };
 
-// Builds the HTTP server without listening, so callers pick the port and host.
-// The Electron wrapper listens on 127.0.0.1:0 (an OS-assigned free port); the
-// CLI below listens on PORT for browser use.
-export function createIptvyServer() {
-  return createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   const u = new URL(req.url, `http://${req.headers.host}`);
 
   // Proxy: invoke the real Vercel handler with a tiny req/res shim.
@@ -61,12 +53,8 @@ export function createIptvyServer() {
     res.statusCode = 404;
     res.end('not found');
   }
-  });
-}
+});
 
-// Run directly (`node web/dev-server.mjs`) → start the browser dev host on PORT.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  createIptvyServer().listen(PORT, () => {
-    console.log(`IPTVy dev server → http://localhost:${PORT}/`);
-  });
-}
+server.listen(PORT, () => {
+  console.log(`IPTVy dev server → http://localhost:${PORT}/`);
+});
