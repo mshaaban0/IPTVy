@@ -89,8 +89,34 @@
     return hlsLoading;
   }
 
-  var activeMpegts = null, activeHls = null;
+  // Resolves a live channel's panel .m3u8 (which the panel 302-redirects to a
+  // load-balanced CDN node) to the concrete node URL, and returns the proxied URL
+  // to poll. hls.js reloads the URL it was handed verbatim, so handing it the
+  // panel URL would land every refresh on a different node and make the sequence
+  // oscillate (replay, then stall). We pin one node client-side instead — resolve
+  // once here, poll that node directly, and re-resolve only when it dies. Falls
+  // back to the proxied panel URL if the resolve endpoint is unavailable.
+  async function resolveLiveNode(panelM3u8) {
+    try {
+      var r = await fetch(proxied(panelM3u8) + '&resolve=1', { headers: { 'Accept': 'application/json' } });
+      if (r.ok) {
+        var j = await r.json();
+        if (j && j.url) return proxied(j.url);
+      }
+    } catch (e) { /* fall back to the panel URL below */ }
+    return proxied(panelM3u8);
+  }
+
+  // Bumped on every playStream so a call that's still awaiting (script load, node
+  // resolve) can bail out if the user has since started another stream.
+  var playGen = 0;
+
+  var activeMpegts = null, activeHls = null, activeVideoCleanup = null;
   function destroyPlayer() {
+    if (activeVideoCleanup) {
+      try { activeVideoCleanup(); } catch (e) {}
+      activeVideoCleanup = null;
+    }
     if (activeMpegts) {
       try { activeMpegts.destroy(); } catch (e) {}
       activeMpegts = null;
@@ -103,6 +129,8 @@
 
   async function playStream(video, url, isLive) {
     destroyPlayer();
+    var gen = ++playGen;
+    function stale() { return gen !== playGen; }
     if (isWebOS) {
       // webOS media pipeline plays both MPEG-TS (live) and MP4 (vod) natively.
       video.src = url;
@@ -132,26 +160,64 @@
       // it can resolve the panel's rotating redirect/token and rewrite the (root-
       // relative, single-node) segment URLs — playing the CDN playlist directly
       // fails on token refresh (406) and cross-host segment paths (403).
-      var hlsSrc = proxied(url.replace(/\.ts(\?|$)/, '.m3u8$1'));
-      // Safari (and iOS) plays HLS natively — no library needed.
+      //
+      // Pin to one CDN node client-side (see resolveLiveNode): resolve the panel's
+      // load-balancer redirect once and poll that node URL directly, so the live
+      // sequence stays monotonic across refreshes. Handing hls.js the panel URL
+      // instead makes every refresh land on a different node — the stream plays
+      // for a few seconds, then oscillates and stalls.
+      var panelM3u8 = url.replace(/\.ts(\?|$)/, '.m3u8$1');
+      var hlsSrc = await resolveLiveNode(panelM3u8);
+      if (stale()) return;
+
+      // Safari (and iOS) plays HLS natively — no library needed. Re-pin on error:
+      // when the node's token dies the <video> errors, so resolve a fresh node and
+      // swap the source (throttled so a truly dead channel doesn't spin).
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = hlsSrc;
         video.play().catch(function () {});
+        var lastRepin = 0;
+        var onNativeError = function () {
+          if (stale() || Date.now() - lastRepin < 3000) return;
+          lastRepin = Date.now();
+          resolveLiveNode(panelM3u8).then(function (fresh) {
+            if (stale()) return;
+            video.src = fresh;
+            video.play().catch(function () {});
+          });
+        };
+        video.addEventListener('error', onNativeError);
+        activeVideoCleanup = function () { video.removeEventListener('error', onNativeError); };
         return;
       }
       try {
         await ensureHls();
       } catch (e) { /* fall through to the mpegts path below */ }
+      if (stale()) return;
       if (window.Hls && window.Hls.isSupported()) {
         var hls = new window.Hls({ lowLatencyMode: false });
         activeHls = hls;
+        var lastResolve = 0, resolving = false;
         hls.on(window.Hls.Events.ERROR, function (evt, data) {
           if (!data || !data.fatal) return;         // non-fatal: hls.js self-heals
           console.error('[IPTVy] hls fatal error', data.type, data.details);
-          // Recover where we can rather than dropping to a paused <video>.
-          if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad();
-          else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
-          else destroyPlayer();
+          if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) { hls.recoverMediaError(); return; }
+          if (data.type !== window.Hls.ErrorTypes.NETWORK_ERROR) { destroyPlayer(); return; }
+          // Network error: the pinned node likely died / its token expired. Pin a
+          // fresh node rather than hammering the dead URL. Throttle so a genuinely
+          // unreachable channel backs off instead of spinning.
+          if (resolving) return;
+          if (Date.now() - lastResolve < 3000) { hls.startLoad(); return; }
+          lastResolve = Date.now(); resolving = true;
+          resolveLiveNode(panelM3u8).then(function (fresh) {
+            resolving = false;
+            if (activeHls !== hls) return;           // player was stopped/replaced
+            hls.loadSource(fresh);
+            hls.startLoad();
+          }).catch(function () {
+            resolving = false;
+            if (activeHls === hls) hls.startLoad();
+          });
         });
         hls.loadSource(hlsSrc);
         hls.attachMedia(video);

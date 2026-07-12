@@ -8,14 +8,13 @@
  * run correctly as a serverless function (requests fan out across many ephemeral
  * instances, so nothing in-process can be relied on between calls).
  *
- * Live HLS is pinned to a single CDN node without any shared state: the panel
+ * Live HLS is pinned to a single CDN node by the CLIENT, not here: the panel
  * load-balances each .m3u8 to a different node whose live windows are a segment
  * or two out of sync, which would make EXT-X-MEDIA-SEQUENCE jump around and the
- * player replay. We resolve the panel's redirect once and 302 the client to a
- * node-specific proxy URL; hls.js adopts that redirected URL and re-polls it, so
- * the channel stays on one node. The panel URL rides along as a ?panel= param so
- * we can re-resolve to a fresh node when the node's short-lived token expires.
- * See servePlaylist().
+ * player replay/stall. The client resolves the panel's redirect once (?resolve=1
+ * → the concrete node URL) and then polls that node URL directly, so it stays on
+ * one node; it re-resolves only when the node's short-lived token dies. This
+ * proxy just (a) resolves on request and (b) fetches whatever URL it's given.
  *
  * Note: relaying live video through a serverless function uses real bandwidth
  * and is bounded by the platform's function timeout. VOD/series play directly
@@ -43,20 +42,30 @@ export default async function handler(req, res) {
     signal: controller.signal
   };
   try {
-    // A .m3u8 target is a live playlist: resolve it to one CDN node and redirect
-    // the client so it stays pinned there (see servePlaylist). Anything else
-    // (segment, JSON, …) is fetched and relayed straight through.
-    if (u.pathname.toLowerCase().endsWith('.m3u8')) {
-      await servePlaylist(u, req, res, fetchOpts);
+    // ?resolve=1 on a live .m3u8: follow the panel's load-balancer redirect and
+    // hand the client back the concrete node URL to pin (see the file header).
+    if (req.query.resolve && u.pathname.toLowerCase().endsWith('.m3u8')) {
+      const probe = await fetch(u.toString(), fetchOpts);
+      const nodeUrl = probe.url || u.toString();
+      if (!probe.ok) { res.status(probe.status).json({ error: 'resolve failed' }); return; }
+      if (!isPublicUrl(nodeUrl)) { res.status(403).json({ error: 'forbidden host' }); return; }
+      res.status(200);
+      res.setHeader('content-type', 'application/json');
+      res.setHeader('cache-control', 'no-store');
+      res.end(JSON.stringify({ url: nodeUrl }));
       return;
     }
 
     const upstream = await fetch(u.toString(), fetchOpts);
     const ct = upstream.headers.get('content-type') || '';
 
-    // Safety net: a playlist served without a .m3u8 path (detected by content
-    // type). Rewrite its URIs but skip the node-pin redirect — it's a rare edge.
-    if (/mpegurl/i.test(ct) && upstream.ok) {
+    // A live playlist (by path or content type) gets its segment/variant/key URIs
+    // rewritten to point back at this proxy, resolved against the URL that served
+    // it (so relative paths hit the right node). Only rewrite a healthy playlist;
+    // relay error responses as-is so the client can react (re-resolve on token
+    // expiry).
+    const isPlaylist = u.pathname.toLowerCase().endsWith('.m3u8') || /mpegurl/i.test(ct);
+    if (isPlaylist && upstream.ok) {
       const text = await upstream.text();
       res.status(upstream.status);
       res.setHeader('content-type', 'application/vnd.apple.mpegurl');
@@ -83,64 +92,6 @@ export default async function handler(req, res) {
   } finally {
     clearTimeout(timer);
   }
-}
-
-// Serves a live HLS playlist while keeping the channel pinned to one CDN node —
-// statelessly, so it survives serverless fan-out. The pin lives in the client's
-// poll URL, not in this process:
-//
-//   1. First hit: `url` is the panel .m3u8. Fetching it 302s to a load-balanced
-//      node; we 302 the client to /api/proxy?url=<node>&panel=<panel>. hls.js
-//      adopts that redirected URL and re-polls it, so it sticks to this node.
-//   2. Refreshes: `url` is the node .m3u8. We fetch it directly (no redirect) and
-//      return the rewritten playlist — same node every time, monotonic sequence.
-//   3. Token expiry: the node stops serving (non-2xx). We re-resolve through the
-//      `panel` param (302s to a fresh node) and redirect the client to pin that.
-async function servePlaylist(u, req, res, fetchOpts) {
-  const requested = u.toString();
-  const panelParam = Array.isArray(req.query.panel) ? req.query.panel[0] : req.query.panel;
-  const panelUrl = panelParam || requested;
-  if (panelParam && !isPublicUrl(panelUrl)) {
-    res.status(403).json({ error: 'forbidden host' }); return;
-  }
-
-  // Poll what the client asked for (the pinned node on refreshes, the panel on
-  // the first hit). If a pinned node has stopped serving, re-resolve via panel.
-  let up = await fetch(requested, fetchOpts);
-  if (!up.ok && panelUrl !== requested) {
-    up = await fetch(panelUrl, fetchOpts);
-  }
-
-  // A followed redirect means we landed on a node different from the poll URL —
-  // pin the client to it. `up.redirected` (not URL string comparison) is what
-  // distinguishes this from a node serving its own URL directly, so there's no
-  // redirect loop when fetch normalises the URL.
-  if (up.ok && up.redirected) {
-    const nodeUrl = up.url;
-    if (!isPublicUrl(nodeUrl)) { res.status(403).json({ error: 'forbidden host' }); return; }
-    res.statusCode = 302;
-    res.setHeader('location', '/api/proxy?url=' + encodeURIComponent(nodeUrl) +
-      '&panel=' + encodeURIComponent(panelUrl));
-    res.setHeader('cache-control', 'no-store');
-    res.end();
-    return;
-  }
-
-  if (up.ok) {
-    const text = await up.text();
-    res.status(up.status);
-    res.setHeader('content-type', 'application/vnd.apple.mpegurl');
-    res.setHeader('cache-control', 'no-store');
-    res.end(rewritePlaylist(text, up.url || requested));
-    return;
-  }
-
-  // Upstream error (panel/node down) — relay the status so the player can retry.
-  res.status(up.status);
-  const ct = up.headers.get('content-type');
-  if (ct) res.setHeader('content-type', ct);
-  res.setHeader('cache-control', 'no-store');
-  res.end();
 }
 
 // Rewrites an HLS playlist so every segment/variant/key URI points back at this
