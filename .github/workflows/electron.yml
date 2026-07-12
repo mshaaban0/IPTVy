@@ -1,0 +1,71 @@
+name: Electron
+
+# Builds the IPTVy Electron desktop app (web/electron) on each platform's native
+# runner and uploads each installer as a downloadable artifact. electron-builder
+# produces the platform installer per OS (Windows NSIS, macOS dmg, Linux
+# AppImage), so we fan out one job per platform. This is a CI/artifact workflow —
+# the Android Release workflow still owns version tags and GitHub Releases; wire
+# these artifacts into that later if you want desktop binaries attached.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/app/**"
+      - "web/api/**"
+      - "web/dev-server.mjs"
+      - "web/electron/**"
+      - ".github/workflows/electron.yml"
+  pull_request:
+    paths:
+      - "web/app/**"
+      - "web/api/**"
+      - "web/dev-server.mjs"
+      - "web/electron/**"
+      - ".github/workflows/electron.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: web/electron
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: iptvy-windows
+            path: web/electron/dist/*.exe
+          - os: macos-latest
+            artifact: iptvy-macos
+            path: web/electron/dist/*.dmg
+          - os: ubuntu-latest
+            artifact: iptvy-linux
+            path: web/electron/dist/*.AppImage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installer
+        run: npm run dist
+        env:
+          # Don't try to code-sign / notarize in CI — these are unsigned artifacts.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload ${{ matrix.artifact }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          retention-days: 7
