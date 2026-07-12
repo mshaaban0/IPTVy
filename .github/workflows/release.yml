@@ -1,23 +1,34 @@
 name: Release
 
-# On every push to main: build the signed release APK as a CI check, and — when
-# versionName names a tag that does not yet exist — publish a GitHub Release with
-# the APK attached. The release is the canonical home of the binary.
+# On every push to main:
+#  - build the signed Android APK (always, as a CI check), and
+#  - when versionName names a tag that does NOT yet exist, publish a GitHub
+#    Release with the APK *and* the native Flutter desktop builds
+#    (Windows / macOS / Linux) attached. The Release is the canonical home of
+#    every binary — nothing is committed to git.
+#
+# Desktop targets can only be built on their own OS, so the `desktop` job fans
+# out one runner per platform. It runs only when we're actually cutting a
+# release (a brand-new tag), so routine pushes don't pay for three desktop
+# builds. Each asset ships twice: a versioned name (IPTVy-<ver>-<os>.<ext>) and
+# a stable name (iptvy-<os>.<ext>) so the Vercel download page can link to
+# releases/latest/download/<stable-name> (see web/vercel.json).
 #
 # Deployment of the download page (web/) is handled by Vercel's own Git
-# integration, not this workflow. The page serves the APK from the latest GitHub
-# Release (see web/vercel.json), so no APK is committed and nothing here touches
-# Vercel. Signing needs no secrets: iptvy-release.jks and its passwords are in repo.
+# integration, not this workflow. Signing needs no secrets: iptvy-release.jks
+# and its passwords live in the repo.
 
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: write   # needed to create tags and releases
+  contents: write # needed to create tags and releases
 
 jobs:
-  build:
+  # Resolve the canonical version (Android versionName) and whether its tag
+  # already exists. Every other job keys off these two outputs.
+  meta:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -25,7 +36,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # need tags to decide whether this version was already released
+          fetch-depth: 0 # need tags to decide whether this version was already released
+
+      - name: Read version and check tag
+        id: meta
+        run: |
+          VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION already tagged — will not release."
+          else
+            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION is new — will cut a release."
+          fi
+
+  # Signed Android APK. Runs on every push as a build check and, on a new tag,
+  # supplies the APK assets to the release job.
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -42,22 +73,11 @@ jobs:
       - name: Build signed release APK
         run: ./gradlew assembleRelease --no-daemon
 
-      - name: Read version and check tag
-        id: meta
-        run: |
-          VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag_exists=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Version: $VERSION"
-
       - name: Stage APK assets
         run: |
+          VERSION=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
           SRC=app/build/outputs/apk/release/app-release.apk
-          cp "$SRC" "IPTVy-${{ steps.meta.outputs.version }}-release.apk"
+          cp "$SRC" "IPTVy-${VERSION}-release.apk"
           cp "$SRC" iptvy.apk   # stable name so the website can link to releases/latest/download/iptvy.apk
 
       - name: Upload APK artifacts
@@ -65,26 +85,110 @@ jobs:
         with:
           name: apk
           path: |
-            IPTVy-${{ steps.meta.outputs.version }}-release.apk
+            IPTVy-*-release.apk
             iptvy.apk
           retention-days: 7
 
+  # Native Flutter desktop builds. Only worth building when we're cutting a
+  # release, so this is gated on a new tag.
+  desktop:
+    needs: meta
+    if: needs.meta.outputs.tag_exists == 'false'
+    strategy:
+      fail-fast: false # a flake on one OS must not block the others' assets
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+            build_path: desktop/build/windows/x64/runner/Release
+          - os: macos-latest
+            target: macos
+            build_path: desktop/build/macos/Build/Products/Release
+          - os: ubuntu-latest
+            target: linux
+            build_path: desktop/build/linux/x64/release/bundle
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux desktop dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libmpv-dev mpv
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Enable desktop target
+        run: flutter config --enable-${{ matrix.target }}-desktop
+
+      - name: flutter pub get
+        run: flutter pub get
+        working-directory: desktop
+
+      - name: Build ${{ matrix.target }}
+        run: flutter build ${{ matrix.target }} --release
+        working-directory: desktop
+
+      # Package each build into a single archive, plus a stable-named copy the
+      # download page links to. Windows ships the whole runner folder (exe +
+      # DLLs + data); macOS ships the .app bundle (ditto preserves symlinks and
+      # the executable bit); Linux ships the bundle folder.
+      - name: Package Windows
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $zip = "IPTVy-$env:VERSION-windows-x64.zip"
+          Compress-Archive -Path "${{ matrix.build_path }}\*" -DestinationPath $zip
+          Copy-Item $zip iptvy-windows.zip
+
+      - name: Package macOS
+        if: matrix.target == 'macos'
+        run: |
+          ditto -c -k --keepParent "${{ matrix.build_path }}/iptvy.app" "IPTVy-$VERSION-macos.zip"
+          cp "IPTVy-$VERSION-macos.zip" iptvy-macos.zip
+
+      - name: Package Linux
+        if: matrix.target == 'linux'
+        run: |
+          tar -czf "IPTVy-$VERSION-linux-x64.tar.gz" -C "${{ matrix.build_path }}" .
+          cp "IPTVy-$VERSION-linux-x64.tar.gz" iptvy-linux.tar.gz
+
+      - name: Upload ${{ matrix.target }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            IPTVy-*-${{ matrix.target }}*.*
+            iptvy-${{ matrix.target }}.*
+          retention-days: 7
+
+  # Publish the Release with every asset that built. Runs on a new tag as long
+  # as the APK is present; a failed desktop leg degrades gracefully (that
+  # platform's asset is simply missing) instead of blocking the whole release.
   release:
-    needs: build
-    if: needs.build.outputs.tag_exists == 'false'
+    needs: [meta, android, desktop]
+    if: ${{ always() && needs.meta.outputs.tag_exists == 'false' && needs.android.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download APK artifacts
+      - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: apk
+          path: assets
+          merge-multiple: true # flatten every artifact into one directory
+
+      - name: List assets
+        run: ls -la assets
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.build.outputs.version }}
-          name: IPTVy v${{ needs.build.outputs.version }}
+          tag_name: v${{ needs.meta.outputs.version }}
+          name: IPTVy v${{ needs.meta.outputs.version }}
           generate_release_notes: true
-          files: |
-            IPTVy-${{ needs.build.outputs.version }}-release.apk
-            iptvy.apk
+          files: assets/*

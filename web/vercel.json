@@ -5,6 +5,21 @@
       "source": "/iptvy.apk",
       "destination": "https://github.com/mshaaban0/IPTVy/releases/latest/download/iptvy.apk",
       "permanent": false
+    },
+    {
+      "source": "/iptvy-windows.zip",
+      "destination": "https://github.com/mshaaban0/IPTVy/releases/latest/download/iptvy-windows.zip",
+      "permanent": false
+    },
+    {
+      "source": "/iptvy-macos.zip",
+      "destination": "https://github.com/mshaaban0/IPTVy/releases/latest/download/iptvy-macos.zip",
+      "permanent": false
+    },
+    {
+      "source": "/iptvy-linux.tar.gz",
+      "destination": "https://github.com/mshaaban0/IPTVy/releases/latest/download/iptvy-linux.tar.gz",
+      "permanent": false
     }
   ]
 }
