@@ -30,6 +30,13 @@
     return '/api/proxy?url=' + encodeURIComponent(url);
   }
 
+  // A direct call from an HTTPS page to an http:// panel is always blocked by the
+  // browser as mixed content, so there's no point probing it — go straight to the
+  // proxy. (Production serves over HTTPS while most panels are plain http.)
+  function isMixedContent(url) {
+    return window.location.protocol === 'https:' && /^http:\/\//i.test(url);
+  }
+
   async function fetchJson(target) {
     var resp = await fetch(target, { headers: { 'Accept': 'application/json' } });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -37,6 +44,9 @@
   }
 
   async function apiGetJson(url) {
+    // Skip the doomed direct probe when it would only trip a mixed-content block
+    // (HTTPS page → http panel); the proxy (same-origin HTTPS) always works.
+    if (httpMode === null && isMixedContent(url)) httpMode = 'proxy';
     if (httpMode === 'direct') return fetchJson(url);
     if (httpMode === 'proxy') return fetchJson(proxied(url));
     // First call: probe the panel directly. Success (it sends CORS) => stay
