@@ -1,16 +1,16 @@
 name: Desktop
 
-# Builds the Flutter desktop app (desktop/) for Windows, macOS and Linux on
-# their native runners and uploads each as a downloadable artifact. Desktop
-# targets can only be built on their own OS, so this fans out one job per
-# platform. This is a CI/artifact workflow — the Android Release workflow still
-# owns version tags and GitHub Releases; wire these artifacts into that later if
-# you want desktop binaries attached to a release.
+# Pull-request check for the Flutter desktop app (desktop/): builds Windows,
+# macOS and Linux on their native runners so a change can't silently break a
+# desktop build. Desktop targets can only be built on their own OS, so this fans
+# out one job per platform.
+#
+# Releasing desktop binaries is owned by release.yml: on a new version tag it
+# rebuilds these same targets and attaches them to the GitHub Release. To avoid
+# building desktop twice on a release push, this workflow does NOT run on push
+# to main — it's a PR/manual check only.
 
 on:
-  push:
-    branches: [main]
-    paths: ["desktop/**", ".github/workflows/desktop.yml"]
   pull_request:
     paths: ["desktop/**", ".github/workflows/desktop.yml"]
   workflow_dispatch:

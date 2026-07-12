@@ -1,11 +1,14 @@
 # Deployment
 
-IPTVy ships two artifacts from one repo:
+IPTVy ships its binaries from one repo:
 
 - **The Android APK** — built from `app/`, signed, and published as a **GitHub Release**
-  asset. The release is the canonical home of the binary; no APK is committed to git.
+  asset. The release is the canonical home of the binary; nothing is committed to git.
+- **The native desktop builds** — Windows / macOS / Linux, built from `desktop/` (Flutter)
+  on their own OS runners and attached to the **same GitHub Release** as the APK.
 - **The download page** — the static site in `web/` (`iptvy.space`), hosted on **Vercel**.
-  Its `/iptvy.apk` link redirects to the APK on the latest GitHub Release.
+  Its `/iptvy.apk`, `/iptvy-windows.zip`, `/iptvy-macos.zip` and `/iptvy-linux.tar.gz` links
+  redirect to the matching assets on the latest GitHub Release.
 
 The two halves are deployed by two independent automations, both triggered by a push to
 `main`:
@@ -32,12 +35,22 @@ They don't overlap: CI never touches Vercel, and Vercel never builds the APK.
    ```
 
 2. **GitHub Actions** (`release.yml`):
-   - `build` — sets up JDK 17 + Android SDK 34 and runs `./gradlew assembleRelease`.
-     Runs on every push as a build check.
-   - `release` — only if tag `v<versionName>` does **not** already exist: creates that
-     tag and a GitHub Release with auto-generated notes and two assets —
-     `IPTVy-<version>-release.apk` (versioned) and `iptvy.apk` (stable name). If the
-     version is unchanged, this job is skipped, so routine pushes don't spam releases.
+   - `meta` — reads `versionName` and checks whether tag `v<versionName>` already exists.
+   - `android` — sets up JDK 17 + Android SDK 34 and runs `./gradlew assembleRelease`.
+     Runs on every push as a build check; stages `IPTVy-<version>-release.apk` (versioned)
+     and `iptvy.apk` (stable name).
+   - `desktop` — only on a new tag: fans out to Windows/macOS/Linux runners, runs
+     `flutter build <target> --release`, and packages each into `IPTVy-<version>-<os>.<ext>`
+     (versioned) plus `iptvy-<os>.<ext>` (stable name).
+   - `release` — only if tag `v<versionName>` does **not** already exist: creates that tag
+     and a GitHub Release with auto-generated notes and every staged asset. A desktop leg
+     that fails degrades gracefully (that platform's asset is just missing) rather than
+     blocking the release. If the version is unchanged, the release is skipped, so routine
+     pushes don't spam releases.
+
+   Desktop targets can only be built on their own OS, so `desktop/` also has a PR-only
+   check (`.github/workflows/desktop.yml`); the release build lives here to avoid building
+   desktop twice on a release push.
 
 3. **Vercel** sees the same push and redeploys `web/` to production. Because
    `web/vercel.json` redirects `/iptvy.apk` → `releases/latest/download/iptvy.apk`, the
@@ -99,5 +112,8 @@ you ever deploy the page by hand: `cd web && vercel deploy --prod --yes`.
 
 ```bash
 curl -s https://iptvy.space/ | grep -o 'v[0-9.]*'                          # version label on the page
-curl -sIL https://iptvy.space/iptvy.apk | grep -iE 'location|content-length' # redirect resolves to the APK
+curl -sIL https://iptvy.space/iptvy.apk         | grep -iE 'location|content-length' # APK redirect resolves
+curl -sIL https://iptvy.space/iptvy-windows.zip | grep -iE 'location|content-length' # Windows build resolves
+curl -sIL https://iptvy.space/iptvy-macos.zip   | grep -iE 'location|content-length' # macOS build resolves
+curl -sIL https://iptvy.space/iptvy-linux.tar.gz | grep -iE 'location|content-length' # Linux build resolves
 ```

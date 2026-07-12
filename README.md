@@ -1,18 +1,50 @@
 # IPTVy
 
-A fast, lightweight IPTV app for **Google TV / Android TV** and **Android phones/tablets**, with **Xtream Codes** support. Built to run on low-resource Google TV sticks.
+A fast, lightweight **Xtream Codes** IPTV player that runs almost everywhere:
+**Android phones/tablets**, **Google TV / Android TV**, the **web browser**,
+**Windows / macOS / Linux desktop**, and **LG webOS TVs** — one login, the same
+Live TV / Movies / Series flow on every screen. Built to stay light enough for
+cheap Google TV sticks while still decoding everything a desktop can.
 
-## Features (v1)
+## Get IPTVy
+
+| Platform | How to get it | Built from |
+| --- | --- | --- |
+| **Web browser** | Open **[iptvy.space/app](https://iptvy.space/app/)** — nothing to install | `web/app` |
+| **Android / Google TV / Fire TV** | **[iptvy.space/iptvy.apk](https://iptvy.space/iptvy.apk)** (sideload APK) | `app/` (Kotlin) |
+| **Windows** | **[iptvy.space/iptvy-windows.zip](https://iptvy.space/iptvy-windows.zip)** — unzip, run `iptvy.exe` | `desktop/` (Flutter) |
+| **macOS** | **[iptvy.space/iptvy-macos.zip](https://iptvy.space/iptvy-macos.zip)** — unzip `iptvy.app`* | `desktop/` (Flutter) |
+| **Linux** | **[iptvy.space/iptvy-linux.tar.gz](https://iptvy.space/iptvy-linux.tar.gz)** — extract, run `./iptvy`† | `desktop/` (Flutter) |
+| **LG webOS TV** | Sideload the `.ipk` (see [`web/app/README.md`](web/app/README.md)) | `web/app` |
+
+Every binary above lives on the **[GitHub Releases](../../releases)** page — the
+download links just redirect to `releases/latest/download/…`, so they always
+point at the newest build. There's also an **[Electron desktop
+build](web/electron/README.md)** (installers per OS) that wraps the web app if
+you prefer that over the native Flutter desktop.
+
+<sub>*macOS: the app is unsigned, so on first launch right-click → Open (or
+`xattr -dr com.apple.quarantine iptvy.app`). †Linux: needs a recent `libmpv`
+(`sudo apt install libmpv2` or `mpv`).</sub>
+
+## Features
 - Xtream Codes login (server URL + username + password)
-- **Live TV**, **Movies (VOD)**, and **Series** browsing
+- **Live TV**, **Movies (VOD)**, and **Series → episodes** browsing
 - Categories with lazy, per-category loading (handles huge playlists without eating RAM)
-- Series → episodes browser
-- Hardware-accelerated playback via Media3 / ExoPlayer (HLS + MPEG-TS)
-- **Cast to TVs (Google Cast / Chromecast)** — tap the Cast button in the player to send a stream to a Chromecast or Google TV; playback hands off to the TV and picks up at the same spot, and comes back to the phone when the session ends
-- D-pad / remote friendly UI + works with touch
-- Small footprint: ~8 MB APK, minSdk 21 (Android 5.0+), conservative player buffers
+- Favorites and lenient/fuzzy title search
+- Hardware-accelerated playback:
+  - **Android** — Media3 / ExoPlayer (HLS + MPEG-TS)
+  - **Desktop** — libmpv via [media_kit](https://pub.dev/packages/media_kit), so live MPEG-TS, HEVC, AC3 and MKV all decode natively (no CORS, no proxy — desktop makes plain native HTTP calls)
+  - **Web / webOS** — the browser/TV media pipeline (`<video>` + a small proxy for live TV in the browser)
+- **Cast to TVs (Google Cast / Chromecast)** — *Android only*; see below
+- D-pad / remote friendly UI (Android TV, webOS) that also works with touch and mouse/keyboard
+- Small footprint: ~8 MB Android APK, minSdk 21 (Android 5.0+), conservative player buffers
 
-## Casting to a TV
+Feature parity is close across platforms; the main differences are **casting**
+(Android only) and **live-TV handling in the browser** (relayed through a proxy —
+see below).
+
+## Casting to a TV (Android)
 On a phone or tablet with Google Play services, a Cast button appears in the top-right of the
 player whenever a Chromecast/Google TV is on the same network. Tap it to pick a device: the video
 transfers to the TV (resuming at the current position) and the phone shows a "Casting to TV" status.
@@ -32,52 +64,59 @@ stream. This means:
   app briefly is fine.
 
 On devices without Google Play services (e.g. bare TV sticks) the Cast button is hidden and
-playback stays local — nothing else changes.
+playback stays local — nothing else changes. Casting is not implemented on desktop, web, or webOS.
 
-## Installable APKs
-- `dist/IPTVy-1.0-release.apk` — signed release (recommended for sideloading)
-- `dist/IPTVy-1.0-debug.apk` — debug build
-
-### Install on a Google TV / Android TV stick
+### Sideloading the APK on a Google TV / Android TV stick
 1. On the device: Settings → System → About → tap *Android version*/*Build* a few times to enable Developer options, then enable **Apps from unknown sources** for your sideload tool (e.g. *Downloader* or *Send Files to TV*).
-2. Transfer `IPTVy-1.0-release.apk` to the device (USB, "Send Files to TV", or a URL via the Downloader app) and open it to install.
+2. In the **Downloader** app enter `iptvy.space/iptvy.apk` (or transfer the APK via USB / "Send Files to TV") and open it to install.
 3. Or via ADB from a computer:
    ```bash
    adb connect <tv-ip>:5555
-   adb install -r dist/IPTVy-1.0-release.apk
+   adb install -r IPTVy-<version>-release.apk   # download from the Releases page
    ```
 The app appears in the Google TV app drawer (it registers a leanback launcher) and on phones in the normal launcher.
 
-## Download
-Latest signed APK: **https://iptvy.space/iptvy.apk** (or the [GitHub Releases](../../releases) page).
-
 ## Building from source
-Requires JDK 17 + Android SDK (compileSdk 34, build-tools 34.0.0).
-```bash
-./build.sh            # builds signed release into dist/
-# or directly:
-./gradlew assembleRelease
-./gradlew assembleDebug
-```
+Each target builds from its own subproject:
+
+| Target | Toolchain | Command |
+| --- | --- | --- |
+| Android | JDK 17 + Android SDK (compileSdk 34, build-tools 34.0.0) | `./build.sh` (signed → `dist/`) or `./gradlew assembleRelease` |
+| Desktop (Windows/macOS/Linux) | Flutter 3.44+ (see [`desktop/README.md`](desktop/README.md)) | `cd desktop && flutter build <windows\|macos\|linux> --release` |
+| Web | none — static files | serve `web/app/` (or `node web/dev-server.mjs` for the live-TV proxy) |
+| Electron desktop | Node 20 | `cd web/electron && npm i && npm run dist` |
+| webOS | `@webos-tools/cli` | `./webos-build.sh` |
+
+Each desktop platform must be built **on that OS** (a Windows `.exe` needs a Windows host, etc.).
 
 ## Releasing & deployment
-To cut a release, bump `versionCode`/`versionName` in `app/build.gradle.kts` and push to
-`main`. Two automations pick it up: GitHub Actions builds + signs the APK and publishes a
-GitHub Release (tag `v<versionName>`), and Vercel's Git integration redeploys the `web/`
-download page (which serves the APK from the latest release). No secrets required. See
-[DEPLOYMENT.md](DEPLOYMENT.md) for details.
+To cut a release, bump `versionCode`/`versionName` in `app/build.gradle.kts` (the single source of
+truth) and push to `main`. Two automations pick it up:
+
+1. **GitHub Actions** (`.github/workflows/release.yml`) builds the signed Android APK on every push
+   as a check, and — when `v<versionName>` is a **new** tag — publishes a **GitHub Release** with the
+   APK **and** the native Flutter desktop builds for Windows, macOS and Linux attached. Each asset
+   ships under both a versioned name (`IPTVy-<ver>-<os>.<ext>`) and a stable name (`iptvy-<os>.<ext>`)
+   that the download page links to.
+2. **Vercel** redeploys the `web/` download page (which serves every binary from the latest release
+   via `releases/latest/download/…` redirects — nothing is committed to git).
+
+No secrets required. See [DEPLOYMENT.md](DEPLOYMENT.md) for details.
 
 ## Architecture
-- Kotlin, classic Views + RecyclerView (lighter than Compose on cheap hardware)
-- `data/XtreamClient.kt` — OkHttp + `org.json` (no reflection); Xtream `player_api.php`
-- `ui/` — `LoginActivity`, `HomeActivity` (tabs + categories + grid), `SeriesDetailActivity`, `PlayerActivity`
-- Stream URLs: `live/…/<id>.ts`, `movie/…/<id>.<ext>`, `series/…/<id>.<ext>`
+The same layers (login → tabs/categories → grid → player, with a shared Xtream `player_api.php`
+client and stream-URL builders) are ported to each stack:
+- **Android** — Kotlin, classic Views + RecyclerView (lighter than Compose on cheap hardware); `app/`
+- **Desktop** — Flutter/Dart + media_kit (libmpv); `desktop/`
+- **Web / webOS** — vanilla JS, one shared codebase with a `js/platform.js` split; `web/app/`
+
+Stream URLs everywhere: `live/…/<id>.ts`, `movie/…/<id>.<ext>`, `series/…/<id>.<ext>`.
 
 ## Roadmap
 - EPG / now-next for Live TV
-- Favorites + resume playback
-- Search
-- iOS and LG webOS ports (separate codebases)
+- Resume playback across sessions
+- Casting on more than just Android
+- iOS port
 
 ## Security note
 The release keystore (`iptvy-release.jks`) and its passwords are committed for convenience. Before publishing publicly, regenerate the keystore and move credentials out of `app/build.gradle.kts`.
