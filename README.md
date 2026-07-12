@@ -19,9 +19,7 @@ cheap Google TV sticks while still decoding everything a desktop can.
 
 Every binary above lives on the **[GitHub Releases](../../releases)** page — the
 download links just redirect to `releases/latest/download/…`, so they always
-point at the newest build. There's also an **[Electron desktop
-build](web/electron/README.md)** (installers per OS) that wraps the web app if
-you prefer that over the native Flutter desktop.
+point at the newest build.
 
 <sub>*macOS: the app is unsigned, so on first launch right-click → Open (or
 `xattr -dr com.apple.quarantine iptvy.app`). †Linux: needs a recent `libmpv`
@@ -84,7 +82,6 @@ Each target builds from its own subproject:
 | Android | JDK 17 + Android SDK (compileSdk 34, build-tools 34.0.0) | `./build.sh` (signed → `dist/`) or `./gradlew assembleRelease` |
 | Desktop (Windows/macOS/Linux) | Flutter 3.44+ (see [`desktop/README.md`](desktop/README.md)) | `cd desktop && flutter build <windows\|macos\|linux> --release` |
 | Web | none — static files | serve `web/app/` (or `node web/dev-server.mjs` for the live-TV proxy) |
-| Electron desktop | Node 20 | `cd web/electron && npm i && npm run dist` |
 | webOS | `@webos-tools/cli` | `./webos-build.sh` |
 
 Each desktop platform must be built **on that OS** (a Windows `.exe` needs a Windows host, etc.).

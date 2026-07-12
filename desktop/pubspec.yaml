@@ -3,7 +3,7 @@ description: "IPTVy — a fast, lightweight desktop IPTV player (Xtream Codes) f
 publish_to: 'none'
 
 # Keep in loose lockstep with the Android/web apps. Bump for each desktop release.
-version: 1.9.0+1
+version: 1.10.0+2
 
 environment:
   sdk: ^3.12.2
