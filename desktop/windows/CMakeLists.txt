@@ -106,3 +106,45 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# === Current libmpv (Windows audio fix) ===
+# media_kit_libs_windows_video (the newest release, 1.0.11) bundles a libmpv
+# built 2023-09-24. That build's WASAPI audio output is silent on Windows 11
+# 24H2/25H2 — video plays but there is no sound on live TV or movies. media_kit
+# has shipped no newer libmpv, so we fetch a current build and overwrite the
+# bundled libmpv-2.dll. The archive is hosted on this repo's own releases (not a
+# third-party URL) so it can't be pruned, and is pinned by SHA256. This mirrors
+# the download+extract approach media_kit_libs_windows_video itself uses.
+#
+# Upstream build: shinchiro/mpv-winbuild-cmake tag 20260610 (git 304426c).
+set(IPTVY_LIBMPV_ARCHIVE_NAME "mpv-dev-x86_64-20260610-git-304426c.7z")
+set(IPTVY_LIBMPV_URL "https://github.com/mshaaban0/IPTVy/releases/download/libmpv-win32-20260610/${IPTVY_LIBMPV_ARCHIVE_NAME}")
+set(IPTVY_LIBMPV_SHA256 "8cbb25ea784f01afbb3f904217cab1317430a8bcfd5680fd827a866367f71cc9")
+set(IPTVY_LIBMPV_ARCHIVE "${CMAKE_BINARY_DIR}/${IPTVY_LIBMPV_ARCHIVE_NAME}")
+set(IPTVY_LIBMPV_DIR "${CMAKE_BINARY_DIR}/iptvy_libmpv")
+set(IPTVY_LIBMPV_DLL "${IPTVY_LIBMPV_DIR}/libmpv-2.dll")
+
+if(NOT EXISTS "${IPTVY_LIBMPV_DLL}")
+  if(NOT EXISTS "${IPTVY_LIBMPV_ARCHIVE}")
+    message(STATUS "IPTVy: downloading current libmpv (${IPTVY_LIBMPV_ARCHIVE_NAME})...")
+    file(DOWNLOAD "${IPTVY_LIBMPV_URL}" "${IPTVY_LIBMPV_ARCHIVE}"
+      EXPECTED_HASH "SHA256=${IPTVY_LIBMPV_SHA256}"
+      TLS_VERIFY ON
+      SHOW_PROGRESS)
+  endif()
+  file(MAKE_DIRECTORY "${IPTVY_LIBMPV_DIR}")
+  message(STATUS "IPTVy: extracting libmpv-2.dll...")
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E tar xf "${IPTVY_LIBMPV_ARCHIVE}" libmpv-2.dll
+    WORKING_DIRECTORY "${IPTVY_LIBMPV_DIR}"
+    RESULT_VARIABLE IPTVY_LIBMPV_EXTRACT_RESULT)
+  if(NOT IPTVY_LIBMPV_EXTRACT_RESULT EQUAL 0 OR NOT EXISTS "${IPTVY_LIBMPV_DLL}")
+    message(FATAL_ERROR "IPTVy: failed to extract libmpv-2.dll from ${IPTVY_LIBMPV_ARCHIVE}")
+  endif()
+endif()
+
+# Declared last, so it runs after the media_kit PLUGIN_BUNDLED_LIBRARIES install
+# above and wins: the current libmpv-2.dll overwrites the outdated one.
+install(FILES "${IPTVY_LIBMPV_DLL}"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
